@@ -1,45 +1,36 @@
 import os
 import requests
 import time
-import json
+import random
 
 TOKEN = os.getenv('BOT_TOKEN')
+CHANNEL = os.getenv('CHANNEL_USERNAME', '@GiftExchangers')  # канал для обязательной подписки
 TON_API = "https://tonapi.io/v2"
 TON_API_KEY = os.getenv('TON_API_KEY', '')
 
-# Реальные коллекции Telegram NFT подарков с getgems.io
 COLLECTIONS = {
-    "gem_signets": {
-        "name": "💎 Gem Signets",
-        "address": "EQAqtF5tZIgNZal80ChzdPMvZCN8OEbJCVJPn_0xNPghQJPW"
-    },
-    "signet_rings": {
-        "name": "💍 Signet Rings",
-        "address": "EQCrGA9slCoksgD-NyRDjtHySKN0Ts8k6hdueJkUkZZdD4_K"
-    },
-    "stellar_rockets": {
-        "name": "🚀 Stellar Rockets",
-        "address": "EQDIruSTyxvq60gUH8j2kkj3qzoBrBaJy9WkKbeNNRasWe4j"
-    },
-    "love_potions": {
-        "name": "🧪 Love Potions",
-        "address": "EQD7yDu2WCgd9Uzx1dF_DQkWK7IZJJ4Mp9M9g1rGUUiQE43m"
-    },
-    "lol_pops": {
-        "name": "🍭 Lol Pops",
-        "address": "EQC6zjid8vJNEWqcXk10XjsdDLRKbcPZzbHusuEW6FokOWIm"
-    },
-    "ton_gifts": {
-        "name": "🎁 TON Gifts",
-        "address": "EQBpMhoMDsN0DjQZXFFBup7l5gbt-UtMzTHN5qaqQtc90CLD"
-    }
+    "gem_signets":      {"name": "💎 Gem Signets",      "address": "EQAqtF5tZIgNZal80ChzdPMvZCN8OEbJCVJPn_0xNPghQJPW"},
+    "signet_rings":     {"name": "💍 Signet Rings",     "address": "EQCrGA9slCoksgD-NyRDjtHySKN0Ts8k6hdueJkUkZZdD4_K"},
+    "stellar_rockets":  {"name": "🚀 Stellar Rockets",  "address": "EQDIruSTyxvq60gUH8j2kkj3qzoBrBaJy9WkKbeNNRasWe4j"},
+    "love_potions":     {"name": "🧪 Love Potions",     "address": "EQD7yDu2WCgd9Uzx1dF_DQkWK7IZJJ4Mp9M9g1rGUUiQE43m"},
+    "lol_pops":         {"name": "🍭 Lol Pops",         "address": "EQC6zjid8vJNEWqcXk10XjsdDLRKbcPZzbHusuEW6FokOWIm"},
+    "ton_gifts":        {"name": "🎁 TON Gifts",        "address": "EQBpMhoMDsN0DjQZXFFBup7l5gbt-UtMzTHN5qaqQtc90CLD"},
 }
+
+# Имена которые считаются женскими для поиска девушек
+FEMALE_NAMES = [
+    "anna","kate","maria","nastya","lena","olga","yulia","natasha","sasha","dasha",
+    "masha","sonya","anya","vika","alina","kristina","polina","irina","sveta","tanya",
+    "kseniya","diana","elena","vera","lisa","xenia","ksenia","katya","ira","olesya",
+    "milana","sofiya","sofia","valeriya","valeria","camilla","kamilla","amina","aisha",
+    "girl","girls","woman","lady","female","she","her","princess","queen","babe"
+]
 
 user_states = {}
 user_temp = {}
-cache = {}  # кэш NFT по коллекциям
+cache = {}
 
-# ===== TELEGRAM =====
+# ===== TG =====
 def tg_request(method, data):
     url = f"https://api.telegram.org/bot{TOKEN}/{method}"
     try:
@@ -50,7 +41,7 @@ def tg_request(method, data):
         return None
 
 def send_message(chat_id, text, reply_markup=None):
-    data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    data = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
     if reply_markup:
         data["reply_markup"] = reply_markup
     return tg_request("sendMessage", data)
@@ -59,11 +50,11 @@ def send_inline(chat_id, text, buttons):
     return tg_request("sendMessage", {
         "chat_id": chat_id, "text": text,
         "reply_markup": {"inline_keyboard": buttons},
-        "parse_mode": "HTML"
+        "parse_mode": "HTML", "disable_web_page_preview": True
     })
 
 def edit_inline(chat_id, message_id, text, buttons=None):
-    data = {"chat_id": chat_id, "message_id": message_id, "text": text, "parse_mode": "HTML"}
+    data = {"chat_id": chat_id, "message_id": message_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
     if buttons is not None:
         data["reply_markup"] = {"inline_keyboard": buttons}
     tg_request("editMessageText", data)
@@ -74,8 +65,22 @@ def answer_callback(callback_id, text=None):
         data["text"] = text
     tg_request("answerCallbackQuery", data)
 
+def check_subscription(user_id):
+    try:
+        r = tg_request("getChatMember", {"chat_id": CHANNEL, "user_id": user_id})
+        if r and r.get("ok"):
+            status = r["result"].get("status", "")
+            return status in ["member", "administrator", "creator"]
+    except:
+        pass
+    return False
+
 def main_keyboard():
-    return {"keyboard": [[{"text": "🔍 Найти NFT"}], [{"text": "📋 Все коллекции"}]], "resize_keyboard": True}
+    return {"keyboard": [
+        [{"text": "🎲 Рандом поиск"}, {"text": "🎯 Поиск по модели"}],
+        [{"text": "👱‍♀️ Поиск девушек"}, {"text": "📊 Статистика"}],
+        [{"text": "🏠 Главное меню"}]
+    ], "resize_keyboard": True}
 
 # ===== TON API =====
 def ton_headers():
@@ -84,111 +89,134 @@ def ton_headers():
         h["Authorization"] = f"Bearer {TON_API_KEY}"
     return h
 
-def load_collection_nfts(address, limit=500):
-    """Загружает NFT коллекции из TON API"""
+def load_collection(address, limit=500):
     all_items = []
     offset = 0
     while len(all_items) < limit:
         try:
-            url = f"{TON_API}/nfts/collections/{address}/items"
-            r = requests.get(url, params={"limit": 100, "offset": offset}, headers=ton_headers(), timeout=20)
+            r = requests.get(f"{TON_API}/nfts/collections/{address}/items",
+                params={"limit": 100, "offset": offset}, headers=ton_headers(), timeout=20)
             if r.status_code != 200:
                 break
-            data = r.json()
-            items = data.get("nft_items", [])
+            items = r.json().get("nft_items", [])
             if not items:
                 break
             all_items.extend(items)
             if len(items) < 100:
                 break
             offset += 100
-            time.sleep(0.5)
+            time.sleep(0.3)
         except Exception as e:
-            print(f"TON load error: {e}")
+            print(f"TON error: {e}")
             break
     return all_items
 
-def parse_attributes_from_items(items):
-    """Собирает все уникальные атрибуты из NFT"""
-    attrs = {}
-    for item in items:
-        meta = item.get("metadata", {})
-        for attr in meta.get("attributes", []):
-            trait = attr.get("trait_type", "").strip()
-            value = str(attr.get("value", "")).strip()
-            if trait and value:
-                attrs.setdefault(trait, set()).add(value)
-    return {k: sorted(v) for k, v in attrs.items()}
+def get_nft_price(item):
+    """Пытается получить цену NFT в TON"""
+    try:
+        sale = item.get("sale", {})
+        if sale:
+            price = sale.get("price", {})
+            if price:
+                val = int(price.get("value", 0))
+                return val / 1e9  # nanotons -> TON
+    except:
+        pass
+    return 0
 
-def filter_items(items, filters):
-    """Фильтрует NFT по атрибутам"""
-    result = []
-    for item in items:
-        meta = item.get("metadata", {})
-        item_attrs = {a["trait_type"]: str(a["value"]) for a in meta.get("attributes", [])}
-        match = all(item_attrs.get(k) == v for k, v in filters.items())
-        if match:
-            owner = item.get("owner", {})
-            username = ""
-            name = "—"
-            if owner:
-                user_info = owner.get("user", {})
-                if user_info:
-                    username = user_info.get("username", "")
-                    name = user_info.get("name", "")
-            result.append({
-                "nft_name": meta.get("name", "NFT"),
-                "username": username,
-                "owner_name": name,
-                "address": owner.get("address", "") if owner else "",
-                "attrs": item_attrs
-            })
-    return result
+def get_owner_info(item):
+    owner = item.get("owner", {})
+    username = ""
+    name = ""
+    address = ""
+    if owner:
+        user_info = owner.get("user", {})
+        if user_info:
+            username = user_info.get("username", "")
+            name = user_info.get("name", "")
+        address = owner.get("address", "")
+    return username, name, address
 
-def get_cached(col_key):
-    if col_key in cache:
-        return cache[col_key]["items"], cache[col_key]["attrs"]
-    return None, None
+def parse_attrs(item):
+    meta = item.get("metadata", {})
+    return {a["trait_type"]: str(a["value"]) for a in meta.get("attributes", [])}
 
-def save_cache(col_key, items, attrs):
-    cache[col_key] = {"items": items, "attrs": attrs}
+def get_all_nfts():
+    """Загружает все NFT из всех коллекций с кэшированием"""
+    all_items = []
+    for key, col in COLLECTIONS.items():
+        if key not in cache:
+            items = load_collection(col["address"])
+            cache[key] = items
+        all_items.extend(cache[key])
+    return all_items
 
-# ===== ХЭНДЛЕРЫ =====
-def show_collections(chat_id, message_id=None):
-    buttons = [[{"text": col["name"], "callback_data": f"col_{key}"}]
-               for key, col in COLLECTIONS.items()]
-    text = "<b>🎁 Выбери коллекцию Telegram NFT:</b>"
-    if message_id:
-        edit_inline(chat_id, message_id, text, buttons)
-    else:
-        send_inline(chat_id, text, buttons)
+def is_female(username, name):
+    text = (username + " " + name).lower()
+    return any(n in text for n in FEMALE_NAMES)
 
-def show_attributes(chat_id, message_id, user_id):
-    attrs = user_temp[user_id].get("attrs", {})
-    filters = user_temp[user_id].get("filters", {})
-    col_key = user_temp[user_id].get("col_key", "")
-    col_name = COLLECTIONS.get(col_key, {}).get("name", "")
-    items = user_temp[user_id].get("items", [])
+def format_results_page(results, page, mode_label):
+    per_page = 10
+    total_pages = max(1, (len(results) + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    chunk = results[start:start+per_page]
 
-    filter_lines = "\n".join([f"  • {k}: <b>{v}</b>" for k, v in filters.items()]) if filters else "  нет"
     text = (
-        f"<b>{col_name}</b>\n"
-        f"📦 Загружено NFT: {len(items)}\n\n"
-        f"<b>Активные фильтры:</b>\n{filter_lines}\n\n"
-        f"<b>Выбери атрибут для фильтра:</b>"
+        f"🎯 <b>Результаты поиска</b>\n"
+        f"📊 Найдено: <b>{len(results)}</b> пользователей\n"
+        f"🎯 Режим: {mode_label}\n\n"
     )
+    for i, item in enumerate(chunk, start+1):
+        username, name, address = item["username"], item["name"], item["address"]
+        if username:
+            text += f"{i}. @{username} | <a href='https://t.me/{username}'>Написать</a>\n"
+        else:
+            short = address[:8] + "..." if address else "???"
+            text += f"{i}. <code>{short}</code>\n"
+
+    text += f"\n📊 Страница {page}/{total_pages}"
 
     buttons = []
-    for trait, values in attrs.items():
-        mark = " ✅" if trait in filters else ""
-        buttons.append([{"text": f"🏷 {trait}{mark} ({len(values)} вар.)", "callback_data": f"attr_{trait}"}])
+    nav = []
+    if page > 1:
+        nav.append({"text": "⬅️ Назад", "callback_data": f"page_{page-1}"})
+    nav.append({"text": f"{page}/{total_pages}", "callback_data": "noop"})
+    if page < total_pages:
+        nav.append({"text": "➡️ Вперед", "callback_data": f"page_{page+1}"})
+    if nav:
+        buttons.append(nav)
+    buttons.append([{"text": "🔄 Искать снова", "callback_data": "main_search"}])
+    buttons.append([{"text": "🏠 Главное меню", "callback_data": "main_menu"}])
 
-    buttons.append([{"text": "🔍 Искать!", "callback_data": "do_search"}])
-    if filters:
-        buttons.append([{"text": "🗑 Сбросить фильтры", "callback_data": f"col_{col_key}"}])
-    buttons.append([{"text": "◀️ К коллекциям", "callback_data": "show_cols"}])
+    return text, buttons
 
-    edit_inline(chat_id, message_id, text, buttons)
+# ===== HANDLERS =====
+def send_subscription_request(chat_id):
+    send_inline(chat_id,
+        f"🔒 <b>Для использования бота необходимо подписаться на канал!</b>\n\n"
+        f"После подписки нажми кнопку ниже.\n\n"
+        f"<b>Примечание:</b> Если вы уже подали заявку, пожалуйста, подождите пока её примут.\n"
+        f"Кнопка '✅ Я подписался' заработает только после принятия заявки.",
+        [
+            [{"text": "📢 Подписаться на канал", "url": f"https://t.me/{CHANNEL.lstrip('@')}"}],
+            [{"text": "✅ Я подписался", "callback_data": "check_sub"}]
+        ]
+    )
+
+def send_main_menu(chat_id):
+    send_inline(chat_id,
+        "🔍 <b>Выберите тип поиска:</b>\n\n"
+        "🎲 <b>Рандом поиск</b> - поиск по режимам (легкий, средний, жирный)\n"
+        "🎯 <b>Поиск по модели</b> - точный поиск по конкретным NFT\n"
+        "👱‍♀️ <b>Поиск девушек</b> - поиск по женским именам",
+        [
+            [{"text": "🎲 Рандом поиск", "callback_data": "random_search"}],
+            [{"text": "🎯 Поиск по модели", "callback_data": "model_search"}],
+            [{"text": "👱‍♀️ Поиск девушек", "callback_data": "girl_search"}],
+            [{"text": "🏠 Главное меню", "callback_data": "main_menu"}]
+        ]
+    )
 
 def handle_message(message):
     chat_id = message["chat"]["id"]
@@ -198,18 +226,72 @@ def handle_message(message):
     if text == "/start":
         user_states.pop(user_id, None)
         user_temp.pop(user_id, None)
-        send_message(chat_id,
-            "<b>🎁 NFT Gift Finder</b>\n\n"
-            "Ищу людей по NFT подаркам Telegram.\n\n"
-            "Выбери коллекцию → фильтруй по модели, фону, символу → получи список владельцев с юзернеймами!\n\n"
-            "Нажми <b>🔍 Найти NFT</b>",
-            main_keyboard()
+        send_main_menu(chat_id)
+        return
+
+    if text == "🏠 Главное меню":
+        send_main_menu(chat_id)
+        return
+
+    if text == "🎲 Рандом поиск":
+        tg_request("sendMessage", {
+            "chat_id": chat_id,
+            "text": (
+                "🎯 <b>Выберите режим поиска:</b>\n\n"
+                "🟢 <b>Легкий режим</b>\n"
+                "Недорогие подарки до 3 TON\n"
+                "Самые неопытные пользователи\n\n"
+                "🟡 <b>Средний режим</b>\n"
+                "Хорошие подарки от 3 до 15 TON\n"
+                "Более опытные пользователи\n\n"
+                "🔴 <b>Жирный режим</b>\n"
+                "Дорогие подарки от 15 до 600 TON\n"
+                "Опытные коллекционеры"
+            ),
+            "parse_mode": "HTML",
+            "reply_markup": {"inline_keyboard": [
+                [{"text": "🟢 Легкий режим", "callback_data": "mode_easy"}],
+                [{"text": "🟡 Средний режим", "callback_data": "mode_medium"}],
+                [{"text": "🔴 Жирный режим", "callback_data": "mode_hard"}],
+                [{"text": "🏠 Главное меню", "callback_data": "main_menu"}]
+            ]}
+        })
+        return
+
+    if text == "🎯 Поиск по модели":
+        tg_request("sendMessage", {
+            "chat_id": chat_id,
+            "text": "🎯 <b>Выберите коллекцию для поиска по модели:</b>",
+            "parse_mode": "HTML",
+            "reply_markup": {"inline_keyboard": [
+                [{"text": col["name"], "callback_data": f"model_col_{key}"}]
+                for key, col in COLLECTIONS.items()
+            ] + [[{"text": "🏠 Главное меню", "callback_data": "main_menu"}]]}
+        })
+        return
+
+    if text == "👱‍♀️ Поиск девушек":
+        send_inline(chat_id,
+            "👱‍♀️ <b>Поиск девушек</b>\n\n"
+            "Ищу владельцев NFT с женскими именами в юзернейме или имени...\n\n"
+            "✅ Выбран режим: 👱‍♀️ Поиск девушек\n"
+            "📝 Шаблон: По женским именам\n\n"
+            "Нажмите кнопку ниже чтобы начать поиск:",
+            [
+                [{"text": "🔍 Начать поиск NFT", "callback_data": "do_girl_search"}],
+                [{"text": "🏠 Главное меню", "callback_data": "main_menu"}]
+            ]
         )
         return
 
-    if text in ["🔍 Найти NFT", "📋 Все коллекции"]:
-        user_temp[user_id] = {}
-        show_collections(chat_id)
+    if text == "📊 Статистика":
+        total_cached = sum(len(v) for v in cache.values())
+        send_message(chat_id,
+            f"📊 <b>Статистика бота</b>\n\n"
+            f"🗂 Коллекций: {len(COLLECTIONS)}\n"
+            f"📦 NFT в кэше: {total_cached}\n"
+            f"👥 Активных сессий: {len(user_states)}"
+        )
         return
 
 def handle_callback(callback):
@@ -221,138 +303,263 @@ def handle_callback(callback):
 
     answer_callback(callback_id)
 
-    # К коллекциям
-    if data == "show_cols":
-        user_temp[user_id] = {}
-        show_collections(chat_id, message_id)
+    if data == "noop":
         return
 
-    # Выбор коллекции
-    if data.startswith("col_"):
-        col_key = data[4:]
-        if col_key not in COLLECTIONS:
-            return
+    # Проверка подписки
 
-        col = COLLECTIONS[col_key]
-        user_temp[user_id] = {"col_key": col_key, "filters": {}}
 
-        # Проверяем кэш
-        items, attrs = get_cached(col_key)
-        if items:
-            user_temp[user_id]["items"] = items
-            user_temp[user_id]["attrs"] = attrs
-            show_attributes(chat_id, message_id, user_id)
-            return
-
-        # Загружаем
+    if data == "main_menu":
         edit_inline(chat_id, message_id,
-            f"<b>⏳ Загружаю {col['name']}...</b>\n\nЭто займёт 10-30 секунд, подожди!",
-            []
+            "🔍 <b>Выберите тип поиска:</b>\n\n"
+            "🎲 <b>Рандом поиск</b> - поиск по режимам (легкий, средний, жирный)\n"
+            "🎯 <b>Поиск по модели</b> - точный поиск по конкретным NFT\n"
+            "👱‍♀️ <b>Поиск девушек</b> - поиск по женским именам",
+            [
+                [{"text": "🎲 Рандом поиск", "callback_data": "random_search"}],
+                [{"text": "🎯 Поиск по модели", "callback_data": "model_search"}],
+                [{"text": "👱‍♀️ Поиск девушек", "callback_data": "girl_search"}],
+            ]
         )
+        return
 
-        items = load_collection_nfts(col["address"])
-        if not items:
+    if data == "main_search":
+        edit_inline(chat_id, message_id,
+            "🔍 <b>Выберите тип поиска:</b>",
+            [
+                [{"text": "🎲 Рандом поиск", "callback_data": "random_search"}],
+                [{"text": "🎯 Поиск по модели", "callback_data": "model_search"}],
+                [{"text": "👱‍♀️ Поиск девушек", "callback_data": "girl_search"}],
+            ]
+        )
+        return
+
+    if data == "random_search":
+        edit_inline(chat_id, message_id,
+            "🎯 <b>Выберите режим поиска:</b>\n\n"
+            "🟢 <b>Легкий режим</b>\nНедорогие подарки до 3 TON\nСамые неопытные пользователи\n\n"
+            "🟡 <b>Средний режим</b>\nХорошие подарки от 3 до 15 TON\nБолее опытные пользователи\n\n"
+            "🔴 <b>Жирный режим</b>\nДорогие подарки от 15 до 600 TON\nОпытные коллекционеры",
+            [
+                [{"text": "🟢 Легкий режим", "callback_data": "mode_easy"}],
+                [{"text": "🟡 Средний режим", "callback_data": "mode_medium"}],
+                [{"text": "🔴 Жирный режим", "callback_data": "mode_hard"}],
+                [{"text": "◀️ Назад", "callback_data": "main_menu"}]
+            ]
+        )
+        return
+
+    if data in ["mode_easy", "mode_medium", "mode_hard"]:
+        modes = {
+            "mode_easy":   ("🟢 Легкий режим",  0,  3),
+            "mode_medium": ("🟡 Средний режим", 3,  15),
+            "mode_hard":   ("🔴 Жирный режим",  15, 600),
+        }
+        label, min_ton, max_ton = modes[data]
+        user_temp[user_id] = {"mode": data, "label": label, "min_ton": min_ton, "max_ton": max_ton}
+
+        edit_inline(chat_id, message_id,
+            f"✅ <b>Выбран режим: {label}</b>\n"
+            f"📝 Шаблон: Стандартный\n\n"
+            f"Нажмите кнопку ниже чтобы начать поиск:",
+            [
+                [{"text": "🔍 Начать поиск NFT", "callback_data": "do_random_search"}],
+                [{"text": "◀️ Назад к режимам", "callback_data": "random_search"}],
+                [{"text": "🏠 Главное меню", "callback_data": "main_menu"}]
+            ]
+        )
+        return
+
+    if data == "do_random_search":
+        label = user_temp.get(user_id, {}).get("label", "🟡 Средний режим")
+        min_ton = user_temp.get(user_id, {}).get("min_ton", 3)
+        max_ton = user_temp.get(user_id, {}).get("max_ton", 15)
+
+        edit_inline(chat_id, message_id, "⏳ <b>Загружаю NFT и ищу пользователей...</b>", [])
+
+        all_items = get_all_nfts()
+        results = []
+        for item in all_items:
+            price = get_nft_price(item)
+            username, name, address = get_owner_info(item)
+            if not username:
+                continue
+            if min_ton <= price <= max_ton:
+                results.append({"username": username, "name": name, "address": address, "price": price})
+
+        # Дедупликация по юзернейму
+        seen = set()
+        unique = []
+        for r in results:
+            if r["username"] not in seen:
+                seen.add(r["username"])
+                unique.append(r)
+
+        random.shuffle(unique)
+        user_temp[user_id]["results"] = unique
+        user_temp[user_id]["page"] = 1
+
+        if not unique:
             edit_inline(chat_id, message_id,
-                "<b>❌ Не удалось загрузить коллекцию.\nПопробуй позже или возьми TON API ключ на tonapi.io</b>",
-                [[{"text": "◀️ Назад", "callback_data": "show_cols"}]]
+                f"❌ <b>Ничего не найдено в режиме {label}</b>\n\nПопробуй другой режим.",
+                [
+                    [{"text": "🔄 Другой режим", "callback_data": "random_search"}],
+                    [{"text": "🏠 Главное меню", "callback_data": "main_menu"}]
+                ]
             )
             return
 
-        attrs = parse_attributes_from_items(items)
-        save_cache(col_key, items, attrs)
-        user_temp[user_id]["items"] = items
-        user_temp[user_id]["attrs"] = attrs
-        show_attributes(chat_id, message_id, user_id)
+        text, buttons = format_results_page(unique, 1, label)
+        edit_inline(chat_id, message_id, text, buttons)
         return
 
-    # Выбор атрибута
-    if data.startswith("attr_"):
-        trait = data[5:]
-        attrs = user_temp.get(user_id, {}).get("attrs", {})
-        values = attrs.get(trait, [])
-        user_temp[user_id]["current_trait"] = trait
+    if data == "model_search":
+        edit_inline(chat_id, message_id,
+            "🎯 <b>Выберите коллекцию для поиска по модели:</b>",
+            [[{"text": col["name"], "callback_data": f"model_col_{key}"}]
+             for key, col in COLLECTIONS.items()] +
+            [[{"text": "◀️ Назад", "callback_data": "main_menu"}]]
+        )
+        return
 
-        # Кнопки значений по 2 в ряд
+    if data.startswith("model_col_"):
+        col_key = data[10:]
+        col = COLLECTIONS.get(col_key)
+        if not col:
+            return
+
+        edit_inline(chat_id, message_id, f"⏳ <b>Загружаю {col['name']}...</b>", [])
+
+        if col_key not in cache:
+            items = load_collection(col["address"])
+            cache[col_key] = items
+        else:
+            items = cache[col_key]
+
+        # Собираем уникальные модели
+        models = set()
+        for item in items:
+            attrs = parse_attrs(item)
+            model = attrs.get("Model") or attrs.get("model") or attrs.get("Name") or attrs.get("name")
+            if model:
+                models.add(model)
+
+        if not models:
+            edit_inline(chat_id, message_id,
+                f"❌ Атрибуты не найдены в коллекции {col['name']}",
+                [[{"text": "◀️ Назад", "callback_data": "model_search"}]]
+            )
+            return
+
+        user_temp[user_id] = {"col_key": col_key, "items": items}
+
         buttons = []
         row = []
-        for val in values[:24]:
-            row.append({"text": val, "callback_data": f"val_{val}"})
+        for m in sorted(models)[:20]:
+            row.append({"text": m, "callback_data": f"select_model_{m}"})
             if len(row) == 2:
                 buttons.append(row)
                 row = []
         if row:
             buttons.append(row)
-        buttons.append([{"text": "◀️ Назад", "callback_data": "back_to_attrs"}])
+        buttons.append([{"text": "◀️ Назад", "callback_data": "model_search"}])
 
         edit_inline(chat_id, message_id,
-            f"<b>Атрибут: {trait}</b>\nВыбери значение:",
+            f"<b>{col['name']}</b>\nВыбери модель NFT:",
             buttons
         )
         return
 
-    # Назад к атрибутам
-    if data == "back_to_attrs":
-        show_attributes(chat_id, message_id, user_id)
-        return
+    if data.startswith("select_model_"):
+        model_name = data[13:]
+        items = user_temp.get(user_id, {}).get("items", [])
+        col_key = user_temp.get(user_id, {}).get("col_key", "")
+        col_name = COLLECTIONS.get(col_key, {}).get("name", "")
 
-    # Выбор значения
-    if data.startswith("val_"):
-        value = data[4:]
-        trait = user_temp[user_id].get("current_trait", "")
-        if trait:
-            user_temp[user_id].setdefault("filters", {})[trait] = value
-        show_attributes(chat_id, message_id, user_id)
-        return
+        results = []
+        seen = set()
+        for item in items:
+            attrs = parse_attrs(item)
+            item_model = attrs.get("Model") or attrs.get("model") or attrs.get("Name") or attrs.get("name") or ""
+            if item_model == model_name:
+                username, name, address = get_owner_info(item)
+                if username and username not in seen:
+                    seen.add(username)
+                    results.append({"username": username, "name": name, "address": address})
 
-    # Поиск
-    if data == "do_search":
-        items = user_temp[user_id].get("items", [])
-        filters = user_temp[user_id].get("filters", {})
-
-        edit_inline(chat_id, message_id, "<b>⏳ Ищу совпадения...</b>", [])
-
-        results = filter_items(items, filters)
+        user_temp[user_id]["results"] = results
+        user_temp[user_id]["page"] = 1
 
         if not results:
             edit_inline(chat_id, message_id,
-                "<b>❌ Ничего не найдено с такими фильтрами.</b>\n\nПопробуй другие параметры.",
+                f"❌ Владельцев NFT «{model_name}» с юзернеймами не найдено.",
+                [[{"text": "◀️ Назад", "callback_data": f"model_col_{col_key}"}]]
+            )
+            return
+
+        label = f"🎯 {col_name} | {model_name}"
+        text, buttons = format_results_page(results, 1, label)
+        edit_inline(chat_id, message_id, text, buttons)
+        return
+
+    if data == "girl_search":
+        edit_inline(chat_id, message_id,
+            "👱‍♀️ <b>Поиск девушек</b>\n\n"
+            "Ищу NFT владельцев с женскими именами в профиле...\n\n"
+            "✅ Выбран режим: 👱‍♀️ Поиск девушек\n"
+            "📝 Шаблон: По женским именам\n\n"
+            "Нажмите кнопку ниже чтобы начать поиск:",
+            [
+                [{"text": "🔍 Начать поиск NFT", "callback_data": "do_girl_search"}],
+                [{"text": "◀️ Назад", "callback_data": "main_menu"}]
+            ]
+        )
+        return
+
+    if data == "do_girl_search":
+        edit_inline(chat_id, message_id, "⏳ <b>Ищу девушек среди владельцев NFT...</b>", [])
+
+        all_items = get_all_nfts()
+        results = []
+        seen = set()
+        for item in all_items:
+            username, name, address = get_owner_info(item)
+            if not username:
+                continue
+            if is_female(username, name) and username not in seen:
+                seen.add(username)
+                results.append({"username": username, "name": name, "address": address})
+
+        random.shuffle(results)
+        user_temp[user_id] = {"results": results, "page": 1}
+
+        if not results:
+            edit_inline(chat_id, message_id,
+                "❌ <b>Девушек не найдено.</b>\n\nПопробуй позже — база обновляется.",
                 [
-                    [{"text": "🔄 Изменить фильтры", "callback_data": "back_to_attrs"}],
-                    [{"text": "◀️ К коллекциям", "callback_data": "show_cols"}]
+                    [{"text": "🔄 Попробовать снова", "callback_data": "do_girl_search"}],
+                    [{"text": "🏠 Главное меню", "callback_data": "main_menu"}]
                 ]
             )
             return
 
-        col_name = COLLECTIONS.get(user_temp[user_id].get("col_key", ""), {}).get("name", "")
-        filter_text = " | ".join([f"{k}: {v}" for k, v in filters.items()]) or "без фильтров"
-        show = results[:100]
+        label = "👱‍♀️ Поиск девушек"
+        text, buttons = format_results_page(results, 1, label)
+        edit_inline(chat_id, message_id, text, buttons)
+        return
 
-        edit_inline(chat_id, message_id,
-            f"<b>✅ {col_name}</b>\n"
-            f"<b>Фильтры:</b> {filter_text}\n"
-            f"<b>Найдено:</b> {len(results)} NFT (показываю {len(show)})",
-            [[{"text": "🔄 Новый поиск", "callback_data": "show_cols"}]]
-        )
-
-        # Отправляем списком по 25
-        chunks = [show[i:i+25] for i in range(0, len(show), 25)]
-        for idx, chunk in enumerate(chunks):
-            text = f"<b>👤 Владельцы {idx*25+1}–{idx*25+len(chunk)}:</b>\n\n"
-            for i, item in enumerate(chunk, idx*25+1):
-                if item["username"]:
-                    user_str = f"@{item['username']}"
-                else:
-                    addr = item["address"][:10] + "..." if item["address"] else "неизвестен"
-                    user_str = f"<code>{addr}</code>"
-                text += f"{i}. {user_str} — {item['nft_name']}\n"
-            send_message(chat_id, text)
-            time.sleep(0.3)
-
-        send_message(chat_id, "<b>✅ Поиск завершён!</b>", main_keyboard())
+    if data.startswith("page_"):
+        page = int(data[5:])
+        results = user_temp.get(user_id, {}).get("results", [])
+        label = user_temp.get(user_id, {}).get("label", "🔍 Поиск")
+        if not results:
+            return
+        text, buttons = format_results_page(results, page, label)
+        edit_inline(chat_id, message_id, text, buttons)
         return
 
 def main():
-    print("NFT Gift Finder started!")
+    print("NFT Parser Bot started!")
     tg_request("deleteWebhook", {})
     offset = 0
     while True:
