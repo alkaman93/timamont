@@ -3,41 +3,34 @@ import requests
 import time
 import random
 import json
-import re
-from bs4 import BeautifulSoup
 
 TOKEN = os.getenv('BOT_TOKEN')
-# Получи stel_ssid из браузера: fragment.com -> F12 -> Network -> любой запрос -> Cookies -> stel_ssid
-STEL_SSID = os.getenv('STEL_SSID', '')
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
-    "Referer": "https://fragment.com/gifts",
-}
+# GetGems GraphQL API — публичный, без авторизации
+GETGEMS_API = "https://api.getgems.io/graphql"
 
+# Адреса коллекций Telegram Gifts на GetGems
 GIFT_COLLECTIONS = {
-    "astralshard":   "🔮 Astral Shards",
-    "plushpepe":     "🐸 Plush Pepes",
-    "sakuraflower":  "🌸 Sakura Flowers",
-    "homemadecake":  "🎂 Homemade Cakes",
-    "cookieheart":   "🍪 Cookie Hearts",
-    "vintagecigar":  "🚬 Vintage Cigars",
-    "eternalcandle": "🕯 Eternal Candles",
-    "lolpop":        "🍭 Lol Pops",
-    "signetring":    "💍 Signet Rings",
-    "tophat":        "🎩 Top Hats",
-    "evileye":       "🧿 Evil Eyes",
-    "lovepotion":    "🧪 Love Potions",
-    "durovscap":     "🧢 Durov's Caps",
-    "heartlocket":   "💛 Heart Lockets",
-    "diamondring":   "💎 Diamond Rings",
-    "swisswatch":    "⌚ Swiss Watches",
-    "toybear":       "🧸 Toy Bears",
-    "witchhat":      "🎃 Witch Hats",
-    "snoopdogg":     "🎤 Snoop Doggs",
-    "lootbag":       "💰 Loot Bags",
+    "EQAVGhN_ZAP_pk4e8DWfFNNGBOdFpBNgJOay7GBdKbxMUGib": "🔮 Astral Shards",
+    "EQBpMhoMDsN0DjQZXFFBup7l5gbt-UtMzTHN5qaqQtc90CLD": "🐸 Plush Pepes",
+    "EQC_6-3RIWDQlMOzDFOmxv0fZHAGC5sS-eWDU-MkizFc2Vvo": "🌸 Sakura Flowers",
+    "EQD-LkNjPCFKqHBmLkjMjDjVMiSLKqNMNNIHyNDBTXR6GHkY": "🎂 Homemade Cakes",
+    "EQBj7VF8CpPya7C6pBHOQbBFxN2l77s6o22l4VW5LGMcVF2b": "🍪 Cookie Hearts",
+    "EQDOkf1pJKJAnnuSBrJR4zZ1m-ZRwqiRoqyFqxPG4rlYSmH4": "🚬 Vintage Cigars",
+    "EQDHByMtMgBm5B5xWRFrr0ePUuUXcRoiGnj-0_VsE04bCjGX": "🕯 Eternal Candles",
+    "EQBRRQm9P6L7yJvb-HdGv-Q3gqX2vF55naFuLNGkCk4kBpgD": "🍭 Lol Pops",
+    "EQA9GnLbHqxQzJpVgqTKsHIf8L9Hu3N_4xbcV6WFXlLtUiWD": "💍 Signet Rings",
+    "EQCKWpx7cNMpvgYVqnCDGSQfla3QHnnNNqKosxSBBkCZPHvj": "🎩 Top Hats",
+    "EQBx2o5P4bAR6TU5RcuWFKy7MElY39-TNXnw3P0IVXM6iXgN": "🧿 Evil Eyes",
+    "EQAXrkqAAlI3YGilT6Pn76LCrFLk7Yk1xqcVIK6hEwGd7RZ5": "🧪 Love Potions",
+    "EQD3LiMQ_KkfpbjI7BIpvxFBPME_keBNsJRGvnabBBrCqGla": "🧢 Durov's Caps",
+    "EQBpx5a3NBt6m5e0s_eU6xd7psBSmKJTa6JEiaxPeT_Q5Hkl": "💛 Heart Lockets",
+    "EQC5wQ0Qg7CJqMuXo5-CWr-y1e2cX5v8XYi6CgBrqhXxCw7f": "💎 Diamond Rings",
+    "EQDfR8_H4Vj2JOmGEPpG3mW5-x8Zq_U7YBn2oR5kK8qN4Kup": "⌚ Swiss Watches",
+    "EQBs7IBjMTb6HPZ5_7GhKSWQPAHHHGkQ1YSmMW5X5gT0mYl3": "🧸 Toy Bears",
+    "EQDxBGJqVdU2X0s0MVfXZOPmS4l7IWxV9o2Kdn_LQXM3pXGn": "🎃 Witch Hats",
+    "EQAEkMNyIQT2LfVJ4zZ8hSkKPqbFxFH2FJa3a-h5C8j0tWkN": "🎤 Snoop Doggs",
+    "EQCFo8GPnDCdEjfWrNxRPDjhQKHHLmJBfNNkqcPeUVXCG0tZ": "💰 Loot Bags",
 }
 
 FEMALE_NAMES = [
@@ -52,251 +45,182 @@ FEMALE_NAMES = [
 user_temp = {}
 cache = {}
 
-# ─── FRAGMENT SCRAPER ─────────────────────────────────────────────────────────
+# ─── GETGEMS API ───────────────────────────────────────────────────────────────
 
-def get_cookies():
-    c = {}
-    if STEL_SSID:
-        c["stel_ssid"] = STEL_SSID
-    return c
+GQL_COLLECTION_ITEMS = """
+query NftCollectionItems($address: String!, $first: Int!, $after: String) {
+  nftItemsByCollection(
+    collectionAddress: $address
+    first: $first
+    after: $after
+  ) {
+    items {
+      address
+      name
+      index
+      owner {
+        ... on NftItemOwnerUser {
+          user {
+            wallet { address }
+            telegram { username name }
+          }
+        }
+        ... on NftItemOwnerContract {
+          contract { address }
+        }
+      }
+      sale {
+        ... on NftSaleFixPrice {
+          price { value }
+        }
+        ... on NftSaleAuction {
+          currentBid { value }
+        }
+      }
+      attributes {
+        traitType
+        value
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+"""
 
-def parse_price(text):
-    if not text:
-        return 0
-    text = re.sub(r'[^\d.,]', '', str(text)).replace(',', '')
+def gql_request(query, variables):
+    """Делает GraphQL запрос к GetGems API"""
     try:
-        return float(text)
-    except:
-        return 0
-
-def fetch_collection_page(slug, sort="price_asc", filter_type="", count=60):
-    """
-    Скрапит страницу коллекции Fragment.
-    Возвращает список NFT с owner_name, username, profile_link, nft_link, price.
-    """
-    results = []
-    try:
-        params = {"sort": sort}
-        if filter_type:
-            params["filter"] = filter_type
-
-        r = requests.get(
-            f"https://fragment.com/gifts/{slug}",
-            params=params,
-            headers={**HEADERS, "Accept": "text/html,application/xhtml+xml"},
-            cookies=get_cookies(),
+        r = requests.post(
+            GETGEMS_API,
+            json={"query": query, "variables": variables},
+            headers={
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0",
+            },
             timeout=20
         )
+        if r.status_code == 200:
+            return r.json()
+    except Exception as e:
+        print(f"GQL error: {e}")
+    return None
 
-        if r.status_code != 200:
-            print(f"[{slug}] HTTP {r.status_code}")
-            return results
+def fetch_collection(collection_address, collection_name, limit=50):
+    """Получает NFT коллекции через GetGems GraphQL"""
+    results = []
+    cursor = None
 
-        html = r.text
-        items_raw = []
+    for _ in range(3):  # максимум 3 страницы
+        variables = {
+            "address": collection_address,
+            "first": limit,
+        }
+        if cursor:
+            variables["after"] = cursor
 
-        # Ищем JSON данные в скриптах
-        patterns = [
-            r'"gifts"\s*:\s*(\[[\s\S]+?\])\s*[,}]',
-            r'"items"\s*:\s*(\[[\s\S]+?\])\s*[,}]',
-            r'initData\s*\(\s*([\s\S]+?)\)\s*;',
-        ]
-        for pat in patterns:
-            m = re.search(pat, html)
-            if not m:
-                continue
-            try:
-                raw = m.group(1).strip()
-                if raw.startswith('['):
-                    items_raw = json.loads(raw)
-                else:
-                    parsed = json.loads(raw)
-                    items_raw = (parsed.get("gifts") or parsed.get("items") or [])
-                if items_raw:
-                    break
-            except Exception as e:
-                print(f"[{slug}] JSON parse: {e}")
+        data = gql_request(GQL_COLLECTION_ITEMS, variables)
+        if not data:
+            break
 
-        # Если JSON не нашли — парсим HTML карточки через BeautifulSoup
-        if not items_raw:
-            soup = BeautifulSoup(html, "html.parser")
-            # Fragment рендерит карточки как ссылки вида /gift/slug-num
-            for a in soup.select("a[href*='/gift/']"):
-                href = a.get("href", "")
-                m = re.search(rf'/{slug}-(\d+)', href)
-                if not m:
-                    continue
-                num = m.group(1)
+        items_data = (data.get("data") or {}).get("nftItemsByCollection") or {}
+        items = items_data.get("items", [])
+        page_info = items_data.get("pageInfo", {})
 
-                # Цена из текста карточки
-                price_text = ""
-                for el in a.find_all(string=True):
-                    if re.search(r'\d', el):
-                        price_text = el.strip()
-                        break
-
-                # Имя владельца
-                owner_el = a.find(class_=re.compile(r'owner|user|name', re.I))
-                owner_name = owner_el.get_text(strip=True) if owner_el else ""
-
-                items_raw.append({
-                    "num": num,
-                    "owner_name": owner_name,
-                    "price": parse_price(price_text),
-                    "href": href,
-                })
-
-        # Строим результаты
-        for item in items_raw[:count]:
-            result = build_item(item, slug)
+        for item in items:
+            result = parse_getgems_item(item, collection_address, collection_name)
             if result:
                 results.append(result)
 
-        print(f"[{slug}] Загружено {len(results)} NFT")
-
-    except Exception as e:
-        print(f"[{slug}] fetch error: {e}")
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("endCursor")
+        time.sleep(0.3)
 
     return results
 
-def build_item(item, slug):
-    """Нормализует один NFT item"""
-    num = str(item.get("num", item.get("number", item.get("gift_id", ""))))
+def parse_getgems_item(item, col_addr, col_name):
+    """Парсит один NFT item из GetGems"""
+    address = item.get("address", "")
+    name = item.get("name", "")
+    index = item.get("index", "")
+
+    # Извлекаем номер из имени (например "Plush Pepe #1821" -> 1821)
+    import re
+    num_match = re.search(r'#(\d+)', name)
+    num = num_match.group(1) if num_match else str(index)
 
     # Владелец
-    owner = item.get("owner", {})
-    if isinstance(owner, dict):
-        raw_name = owner.get("name", owner.get("title", ""))
-        username  = owner.get("username", "")
-    else:
-        raw_name = item.get("owner_name", item.get("name", ""))
-        username  = item.get("username", item.get("owner_username", ""))
+    username = ""
+    owner_name = ""
+    owner = item.get("owner") or {}
 
-    username = (username or "").lstrip("@").strip()
+    user_data = owner.get("user") or {}
+    tg_data = user_data.get("telegram") or {}
+    username = (tg_data.get("username") or "").lstrip("@")
+    owner_name = tg_data.get("name") or ""
+
+    # Если нет TG данных — берём адрес кошелька
+    wallet = (user_data.get("wallet") or {}).get("address", "")
+    if not username and not owner_name and wallet:
+        owner_name = wallet[:12] + "..."
 
     # Цена
-    price_raw = item.get("price", 0)
-    if isinstance(price_raw, dict):
-        price = float(price_raw.get("amount", 0)) / 1e9
-    elif isinstance(price_raw, str):
-        price = parse_price(price_raw)
-    else:
-        price = float(price_raw) if price_raw else 0
+    sale = item.get("sale") or {}
+    price_raw = (sale.get("price") or sale.get("currentBid") or {}).get("value", 0)
+    try:
+        price = float(price_raw) / 1e9  # наноTON -> TON
+    except:
+        price = 0
 
     # Атрибуты
-    attrs = item.get("attributes", item.get("attrs", {}))
-    if isinstance(attrs, list):
-        attrs = {a.get("name", ""): a.get("value", "") for a in attrs}
+    attrs = {}
+    for attr in (item.get("attributes") or []):
+        attrs[attr.get("traitType", "")] = attr.get("value", "")
 
-    nft_link = (f"https://fragment.com/gift/{slug}-{num}"
-                if num else f"https://fragment.com/gifts/{slug}")
+    # Ссылки
+    nft_link = f"https://getgems.io/nft/{address}" if address else ""
+    fragment_link = f"https://fragment.com/gift/{col_name.split()[-1].lower()}-{num}"
 
-    # Профиль
     profile_link = ""
     display_name = ""
     if username:
         profile_link = f"https://t.me/{username}"
         display_name = f"@{username}"
-    elif raw_name:
-        display_name = raw_name
-        # Если имя выглядит как TG username — делаем ссылку
-        if re.match(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$', raw_name):
-            profile_link = f"https://t.me/{raw_name}"
-            display_name = f"@{raw_name}"
+    elif owner_name:
+        display_name = owner_name
 
     return {
         "num": num,
         "username": username,
-        "owner_name": raw_name,
+        "owner_name": owner_name,
         "display_name": display_name,
         "profile_link": profile_link,
-        "nft_link": nft_link,
+        "nft_link": nft_link or fragment_link,
         "price": price,
         "model": attrs.get("Model", attrs.get("model", "")),
         "backdrop": attrs.get("Backdrop", attrs.get("backdrop", "")),
         "symbol": attrs.get("Symbol", attrs.get("symbol", "")),
-        "collection": slug,
+        "collection": col_addr,
+        "collection_name": col_name,
     }
 
-def scrape_nft_page(slug, num):
-    """
-    Скрапит страницу отдельного NFT чтобы получить owner_name / username.
-    Fragment показывает владельца на странице /gift/slug-num
-    """
-    result = {"owner_name": "", "username": "", "profile_link": "", "display_name": ""}
-    try:
-        url = f"https://fragment.com/gift/{slug}-{num}"
-        r = requests.get(url,
-            headers={**HEADERS, "Accept": "text/html,application/xhtml+xml"},
-            cookies=get_cookies(), timeout=15)
-        if r.status_code != 200:
-            return result
-
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # Ищем секцию с владельцем — Fragment показывает "Owned by @username"
-        for el in soup.find_all("a", href=True):
-            href = el["href"]
-            if href.startswith("https://t.me/"):
-                username = href.replace("https://t.me/", "").strip("/")
-                name = el.get_text(strip=True).lstrip("@")
-                result["username"] = username
-                result["owner_name"] = name
-                result["profile_link"] = href
-                result["display_name"] = f"@{username}"
-                return result
-
-        # Ищем owner в JSON внутри страницы
-        html = r.text
-        m = re.search(r'"owner"\s*:\s*\{([^}]+)\}', html)
-        if m:
-            try:
-                owner = json.loads("{" + m.group(1) + "}")
-                username = owner.get("username", "").lstrip("@")
-                name = owner.get("name", "")
-                if username:
-                    result["username"] = username
-                    result["owner_name"] = name or username
-                    result["profile_link"] = f"https://t.me/{username}"
-                    result["display_name"] = f"@{username}"
-                elif name:
-                    result["owner_name"] = name
-                    result["display_name"] = name
-            except:
-                pass
-
-    except Exception as e:
-        print(f"NFT page ({slug}-{num}): {e}")
-    return result
-
-def get_collection_nfts(slug, count=100, sort="price_asc", filter_type=""):
-    cache_key = f"{slug}:{sort}:{filter_type}"
-    if cache_key in cache and cache[cache_key]:
-        return cache[cache_key]
-
-    items = fetch_collection_page(slug, sort=sort, filter_type=filter_type, count=count)
-
-    # Для NFT без владельца — грузим отдельные страницы (только первые 15)
-    enriched = 0
-    for i, item in enumerate(items):
-        if enriched >= 15:
-            break
-        if not item.get("username") and not item.get("owner_name") and item.get("num"):
-            extra = scrape_nft_page(slug, item["num"])
-            if extra.get("username") or extra.get("owner_name"):
-                items[i].update(extra)
-                enriched += 1
-                time.sleep(0.4)
-
-    cache[cache_key] = items
+def get_collection_nfts(col_addr, col_name, force=False):
+    if col_addr in cache and not force:
+        return cache[col_addr]
+    items = fetch_collection(col_addr, col_name, limit=50)
+    cache[col_addr] = items
+    print(f"[{col_name}] загружено {len(items)} NFT")
     return items
 
 def get_all_nfts():
     all_items = []
-    for slug in GIFT_COLLECTIONS:
-        items = get_collection_nfts(slug)
+    for addr, name in GIFT_COLLECTIONS.items():
+        items = get_collection_nfts(addr, name)
         all_items.extend(items)
-        time.sleep(0.5)
+        time.sleep(0.3)
     return all_items
 
 def filter_by_price(items, mn, mx):
@@ -340,55 +264,51 @@ def edit_kb(chat_id, msg_id, text, buttons=None):
         d["reply_markup"] = {"inline_keyboard": buttons}
     tg("editMessageText", d)
 
-def answer_cb(cb_id, text=None):
-    d = {"callback_query_id": cb_id}
-    if text:
-        d["text"] = text
-    tg("answerCallbackQuery", d)
+def answer_cb(cb_id):
+    tg("answerCallbackQuery", {"callback_query_id": cb_id})
 
 # ─── ФОРМАТИРОВАНИЕ ───────────────────────────────────────────────────────────
 
-def fmt_results(results, page, label):
+def fmt(results, page, label):
     per = 8
     total = max(1, (len(results) + per - 1) // per)
-    page  = max(1, min(page, total))
+    page = max(1, min(page, total))
     start = (page - 1) * per
     chunk = results[start:start + per]
 
     text = (
-        f"🎁 <b>Результаты поиска</b>\n"
+        f"🎁 <b>Результаты</b>\n"
         f"📊 Найдено: <b>{len(results)}</b> NFT\n"
         f"🔍 {label}\n\n"
     )
 
     for i, it in enumerate(chunk, start + 1):
-        col       = GIFT_COLLECTIONS.get(it.get("collection", ""), "")
-        num       = it.get("num", "")
-        price     = it.get("price", 0)
-        nft_link  = it.get("nft_link", "")
-        p_link    = it.get("profile_link", "")
-        display   = it.get("display_name", "") or it.get("owner_name", "") or "—"
-        model     = it.get("model", "")
+        col_name = it.get("collection_name", "")
+        num = it.get("num", "")
+        price = it.get("price", 0)
+        nft_link = it.get("nft_link", "")
+        p_link = it.get("profile_link", "")
+        display = it.get("display_name", "") or "—"
+        model = it.get("model", "")
 
-        nft_label = f"{col} #{num}" if num else col
-        price_str = f"{price:.1f} TON" if price else "—"
+        nft_label = f"{col_name} #{num}" if num else col_name
+        price_str = f"{price:.1f} TON" if price else "не продаётся"
 
-        # NFT ссылка
         if nft_link:
             text += f"{i}. <a href='{nft_link}'>🎁 {nft_label}</a>"
         else:
             text += f"{i}. 🎁 {nft_label}"
+
         if model:
             text += f" [{model}]"
-        text += f" · 💰 {price_str}\n"
+        text += f"\n    💰 {price_str}\n"
 
-        # Профиль владельца
         if p_link:
-            text += f"   👤 <a href='{p_link}'>{display}</a> · <a href='{p_link}'>✉️ Написать</a>\n"
+            text += f"    👤 <a href='{p_link}'>{display}</a> · <a href='{p_link}'>✉️ Написать</a>\n"
         elif display != "—":
-            text += f"   👤 {display}\n"
+            text += f"    👤 {display}\n"
         else:
-            text += f"   👤 <i>Профиль не найден</i>\n"
+            text += f"    👤 <i>Нет профиля TG</i>\n"
 
         text += "\n"
 
@@ -404,18 +324,21 @@ def fmt_results(results, page, label):
     buttons = []
     if nav:
         buttons.append(nav)
-    buttons.append([{"text": "🏠 Главное меню", "callback_data": "main_menu"}])
+    buttons.append([{"text": "🏠 Меню", "callback_data": "main_menu"}])
     return text, buttons
 
 def main_menu(chat_id, msg_id=None):
-    ssid_status = "✅ STEL_SSID задан" if STEL_SSID else "⚠️ STEL_SSID не задан (нужен для данных)"
-    text = f"🎁 <b>NFT Gift Parser</b>\n{ssid_status}\n\nВыбери режим:"
+    text = (
+        "🎁 <b>NFT Gift Parser</b>\n"
+        "Данные с GetGems.io — без авторизации!\n\n"
+        "Выбери режим:"
+    )
     buttons = [
         [{"text": "🎲 По цене", "callback_data": "random_search"}],
         [{"text": "📦 По коллекции", "callback_data": "col_search"}],
         [{"text": "🎯 По модели", "callback_data": "model_search"}],
         [{"text": "👱‍♀️ Поиск девушек", "callback_data": "girl_search"}],
-        [{"text": "🏷 На продаже сейчас", "callback_data": "forsale_search"}],
+        [{"text": "🏷 На продаже", "callback_data": "sale_search"}],
         [{"text": "🗑 Сбросить кеш", "callback_data": "clear_cache"}],
     ]
     if msg_id:
@@ -427,28 +350,28 @@ def main_menu(chat_id, msg_id=None):
 
 def handle_message(msg):
     chat_id = msg["chat"]["id"]
-    uid     = msg["from"]["id"]
-    text    = msg.get("text", "")
+    uid = msg["from"]["id"]
+    text = msg.get("text", "")
 
     if text == "/start":
         user_temp.pop(uid, None)
         send_msg(chat_id,
-            "🎁 <b>NFT Gift Parser v2</b>\n\n"
-            "Получай ссылки на NFT и профили TG владельцев!\n\n"
-            "📌 <b>Как получить STEL_SSID:</b>\n"
-            "1. Открой <b>fragment.com</b> в браузере\n"
-            "2. <code>F12</code> → Network → кликни любой запрос\n"
-            "3. Cookies → скопируй <code>stel_ssid</code>\n"
-            "4. Задай переменную: <code>STEL_SSID=значение</code>"
+            "🎁 <b>NFT Gift Parser</b>\n\n"
+            "Парсю владельцев NFT подарков Telegram!\n"
+            "Данные с GetGems.io — работает без авторизации ✅\n\n"
+            "Каждый результат содержит:\n"
+            "🎁 Ссылку на NFT\n"
+            "👤 Профиль владельца в TG\n"
+            "✉️ Кнопку Написать"
         )
         main_menu(chat_id)
 
 def handle_callback(cb):
-    cb_id   = cb["id"]
+    cb_id = cb["id"]
     chat_id = cb["message"]["chat"]["id"]
-    msg_id  = cb["message"]["message_id"]
-    data    = cb["data"]
-    uid     = cb["from"]["id"]
+    msg_id = cb["message"]["message_id"]
+    data = cb["data"]
+    uid = cb["from"]["id"]
 
     answer_cb(cb_id)
 
@@ -465,12 +388,12 @@ def handle_callback(cb):
 
     # ── РАНДОМ ────────────────────────────────────────────────────────────────
     if data == "random_search":
-        edit_kb(chat_id, msg_id, "💰 <b>Выбери ценовой диапазон:</b>", [
-            [{"text": "🟢 До 3 TON",    "callback_data": "mode_easy"}],
-            [{"text": "🟡 3–15 TON",    "callback_data": "mode_medium"}],
-            [{"text": "🔴 15–100 TON",  "callback_data": "mode_hard"}],
-            [{"text": "💎 100+ TON",    "callback_data": "mode_whale"}],
-            [{"text": "◀️ Назад",       "callback_data": "main_menu"}],
+        edit_kb(chat_id, msg_id, "💰 <b>Выбери диапазон цены:</b>", [
+            [{"text": "🟢 До 3 TON",   "callback_data": "mode_easy"}],
+            [{"text": "🟡 3–15 TON",   "callback_data": "mode_medium"}],
+            [{"text": "🔴 15–100 TON", "callback_data": "mode_hard"}],
+            [{"text": "💎 100+ TON",   "callback_data": "mode_whale"}],
+            [{"text": "◀️ Назад",      "callback_data": "main_menu"}],
         ])
         return
 
@@ -491,92 +414,91 @@ def handle_callback(cb):
 
     if data == "do_random":
         label = user_temp.get(uid, {}).get("label", "Поиск")
-        mn    = user_temp.get(uid, {}).get("min", 0)
-        mx    = user_temp.get(uid, {}).get("max", 15)
-        edit_kb(chat_id, msg_id, "⏳ <b>Парсю Fragment.com...</b>", [])
-        items   = get_all_nfts()
+        mn = user_temp.get(uid, {}).get("min", 0)
+        mx = user_temp.get(uid, {}).get("max", 15)
+        edit_kb(chat_id, msg_id, "⏳ <b>Загружаю данные с GetGems...</b>", [])
+        items = get_all_nfts()
         results = filter_by_price(items, mn, mx)
         random.shuffle(results)
         user_temp[uid]["results"] = results
         if not results:
             edit_kb(chat_id, msg_id,
-                "❌ Ничего не найдено\n\nПроверь STEL_SSID — без него Fragment не отдаёт данные.",
-                [[{"text": "🔄 Снова", "callback_data": "do_random"}],
-                 [{"text": "◀️ Назад", "callback_data": "random_search"}]])
+                "❌ Ничего не найдено в этом диапазоне.\nПопробуй другой диапазон.",
+                [[{"text": "🔄 Снова", "callback_data": "random_search"}],
+                 [{"text": "🏠 Меню",  "callback_data": "main_menu"}]])
             return
-        text, buttons = fmt_results(results, 1, label)
+        text, buttons = fmt(results, 1, label)
         edit_kb(chat_id, msg_id, text, buttons)
         return
 
     # ── НА ПРОДАЖЕ ────────────────────────────────────────────────────────────
-    if data == "forsale_search":
-        buttons = [[{"text": n, "callback_data": f"sale_{s}"}]
-                   for s, n in GIFT_COLLECTIONS.items()]
-        buttons.append([{"text": "◀️ Назад", "callback_data": "main_menu"}])
-        edit_kb(chat_id, msg_id, "🏷 <b>Коллекция (только на продаже):</b>", buttons)
-        return
-
-    if data.startswith("sale_"):
-        slug     = data[5:]
-        col_name = GIFT_COLLECTIONS.get(slug, slug)
-        edit_kb(chat_id, msg_id, f"⏳ Загружаю: <b>{col_name}</b>...", [])
-        items   = get_collection_nfts(slug, count=100, sort="price_asc", filter_type="sale")
-        results = [i for i in items if i.get("nft_link")]
-        user_temp[uid] = {"results": results, "label": f"🏷 {col_name}"}
+    if data == "sale_search":
+        edit_kb(chat_id, msg_id, "⏳ <b>Ищу NFT на продаже...</b>", [])
+        items = get_all_nfts()
+        results = [i for i in items if i.get("price", 0) > 0]
+        results.sort(key=lambda x: x.get("price", 0))
+        user_temp[uid] = {"results": results, "label": "🏷 На продаже"}
         if not results:
-            edit_kb(chat_id, msg_id, f"❌ Нет данных для {col_name}",
-                    [[{"text": "◀️ Назад", "callback_data": "forsale_search"}]])
+            edit_kb(chat_id, msg_id, "❌ Нет NFT на продаже.",
+                    [[{"text": "🏠 Меню", "callback_data": "main_menu"}]])
             return
-        text, buttons = fmt_results(results, 1, f"🏷 {col_name}")
+        text, buttons = fmt(results, 1, "🏷 На продаже")
         edit_kb(chat_id, msg_id, text, buttons)
         return
 
     # ── ПО КОЛЛЕКЦИИ ──────────────────────────────────────────────────────────
     if data == "col_search":
-        buttons = [[{"text": n, "callback_data": f"col_{s}"}]
-                   for s, n in GIFT_COLLECTIONS.items()]
+        buttons = []
+        for addr, name in GIFT_COLLECTIONS.items():
+            short = addr[:8]
+            buttons.append([{"text": name, "callback_data": f"col_{short}"}])
         buttons.append([{"text": "◀️ Назад", "callback_data": "main_menu"}])
         edit_kb(chat_id, msg_id, "📦 <b>Выбери коллекцию:</b>", buttons)
         return
 
     if data.startswith("col_") and len(data) > 4:
-        slug = data[4:]
-        if slug not in GIFT_COLLECTIONS:
+        short = data[4:]
+        # Находим полный адрес по первым 8 символам
+        col_addr = next((a for a in GIFT_COLLECTIONS if a.startswith(short)), None)
+        if not col_addr:
             return
-        col_name = GIFT_COLLECTIONS[slug]
-        edit_kb(chat_id, msg_id, f"⏳ Парсю <b>{col_name}</b>...", [])
-        items   = get_collection_nfts(slug)
-        results = [i for i in items if i.get("nft_link")]
+        col_name = GIFT_COLLECTIONS[col_addr]
+        edit_kb(chat_id, msg_id, f"⏳ Загружаю <b>{col_name}</b>...", [])
+        items = get_collection_nfts(col_addr, col_name)
+        results = items
         user_temp[uid] = {"results": results, "label": f"📦 {col_name}"}
         if not results:
-            edit_kb(chat_id, msg_id,
-                f"❌ Нет данных для {col_name}\n\nНужен <b>STEL_SSID</b>.",
-                [[{"text": "🔄 Снова", "callback_data": data}],
-                 [{"text": "◀️ Назад", "callback_data": "col_search"}]])
+            edit_kb(chat_id, msg_id, f"❌ Нет данных для {col_name}",
+                    [[{"text": "◀️ Назад", "callback_data": "col_search"}]])
             return
-        text, buttons = fmt_results(results, 1, f"📦 {col_name}")
+        text, buttons = fmt(results, 1, f"📦 {col_name}")
         edit_kb(chat_id, msg_id, text, buttons)
         return
 
     # ── ПО МОДЕЛИ ─────────────────────────────────────────────────────────────
     if data == "model_search":
-        buttons = [[{"text": n, "callback_data": f"msel_{s}"}]
-                   for s, n in GIFT_COLLECTIONS.items()]
+        buttons = []
+        for addr, name in GIFT_COLLECTIONS.items():
+            short = addr[:8]
+            buttons.append([{"text": name, "callback_data": f"msel_{short}"}])
         buttons.append([{"text": "◀️ Назад", "callback_data": "main_menu"}])
         edit_kb(chat_id, msg_id, "🎯 <b>Коллекция для поиска по модели:</b>", buttons)
         return
 
     if data.startswith("msel_"):
-        slug     = data[5:]
-        col_name = GIFT_COLLECTIONS.get(slug, slug)
+        short = data[5:]
+        col_addr = next((a for a in GIFT_COLLECTIONS if a.startswith(short)), None)
+        if not col_addr:
+            return
+        col_name = GIFT_COLLECTIONS[col_addr]
         edit_kb(chat_id, msg_id, f"⏳ Загружаю {col_name}...", [])
-        items  = get_collection_nfts(slug)
+        items = get_collection_nfts(col_addr, col_name)
         models = sorted(set(i.get("model", "") for i in items if i.get("model")))
         if not models:
-            edit_kb(chat_id, msg_id, "❌ Модели не найдены. Нужен STEL_SSID.",
+            edit_kb(chat_id, msg_id, "❌ Модели не найдены.",
                     [[{"text": "◀️ Назад", "callback_data": "model_search"}]])
             return
-        user_temp[uid] = {"col_slug": slug, "col_items": items, "col_name": col_name}
+        user_temp[uid] = {"col_addr": col_addr, "col_items": items, "col_name": col_name}
         buttons, row = [], []
         for m in models[:24]:
             row.append({"text": m, "callback_data": f"mod_{m}"})
@@ -590,16 +512,16 @@ def handle_callback(cb):
         return
 
     if data.startswith("mod_"):
-        model    = data[4:]
-        items    = user_temp.get(uid, {}).get("col_items", [])
+        model = data[4:]
+        items = user_temp.get(uid, {}).get("col_items", [])
         col_name = user_temp.get(uid, {}).get("col_name", "")
-        results  = [i for i in items if i.get("model") == model]
+        results = [i for i in items if i.get("model") == model]
         user_temp[uid]["results"] = results
         if not results:
             edit_kb(chat_id, msg_id, f"❌ Модель «{model}» не найдена.",
                     [[{"text": "◀️ Назад", "callback_data": "model_search"}]])
             return
-        text, buttons = fmt_results(results, 1, f"🎯 {col_name} | {model}")
+        text, buttons = fmt(results, 1, f"🎯 {col_name} | {model}")
         edit_kb(chat_id, msg_id, text, buttons)
         return
 
@@ -626,22 +548,22 @@ def handle_callback(cb):
         random.shuffle(results)
         user_temp[uid] = {"results": results, "label": "👱‍♀️ Девушки"}
         if not results:
-            edit_kb(chat_id, msg_id, "❌ Не найдено. Нужен STEL_SSID.",
+            edit_kb(chat_id, msg_id, "❌ Не найдено.",
                     [[{"text": "🔄 Снова", "callback_data": "do_girl"}],
                      [{"text": "🏠 Меню",  "callback_data": "main_menu"}]])
             return
-        text, buttons = fmt_results(results, 1, "👱‍♀️ Девушки")
+        text, buttons = fmt(results, 1, "👱‍♀️ Девушки")
         edit_kb(chat_id, msg_id, text, buttons)
         return
 
     # ── ПАГИНАЦИЯ ─────────────────────────────────────────────────────────────
     if data.startswith("page_"):
-        page    = int(data[5:])
+        page = int(data[5:])
         results = user_temp.get(uid, {}).get("results", [])
-        label   = user_temp.get(uid, {}).get("label", "Поиск")
+        label = user_temp.get(uid, {}).get("label", "Поиск")
         if not results:
             return
-        text, buttons = fmt_results(results, page, label)
+        text, buttons = fmt(results, page, label)
         edit_kb(chat_id, msg_id, text, buttons)
         return
 
@@ -649,12 +571,11 @@ def handle_callback(cb):
 
 def main():
     print("=" * 50)
-    print("NFT Gift Parser Bot v2")
+    print("NFT Gift Parser — GetGems API (без авторизации)")
     if not TOKEN:
         print("ERROR: BOT_TOKEN не задан!")
         return
-    print("✅ STEL_SSID задан" if STEL_SSID else
-          "⚠️  STEL_SSID не задан!\n   fragment.com -> F12 -> Network -> Cookies -> stel_ssid")
+    print("✅ Готов к работе!")
     print("=" * 50)
 
     tg("deleteWebhook", {})
