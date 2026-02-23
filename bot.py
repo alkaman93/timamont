@@ -302,6 +302,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["state"] = None
         return
 
+    # ===== ADMIN PANEL BUTTONS =====
     if data == "admin_stats":
         await query.edit_message_caption(
             caption="📊 *Статистика бота*\n\n👥 Пользователей: —\n💰 Сделок: —\n📈 Объём выплат: —\n\n_Подключите базу данных для реальной статистики_",
@@ -448,10 +449,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
-
----
-
-Также создай файл `requirements.txt`:
-```
-python-telegram-bot==20.7
