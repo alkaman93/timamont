@@ -6,9 +6,10 @@ Application, CommandHandler, CallbackQueryHandler,
 MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-TOKEN = “8729370914:AAFe5bDtSnGxuUbu-yUZ7dhNoRT-boOHkik”
-ADMIN_ID = 174415647
-MANAGER = “@hostelman”
+import os
+TOKEN = os.environ.get(‘BOT_TOKEN’, ‘’)
+ADMIN_ID = int(os.environ.get(‘ADMIN_ID’, ‘174415647’))
+MANAGER = os.environ.get(‘MANAGER’, ‘@hostelman’)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(**name**)
