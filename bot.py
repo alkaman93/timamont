@@ -1,21 +1,14 @@
 import logging
 import random
-import os
-from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
 Application, CommandHandler, CallbackQueryHandler,
 MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TOKEN = os.getenv(“BOT_TOKEN”)
-ADMIN_ID = int(os.getenv(“ADMIN_ID”))
-MANAGER = os.getenv(“MANAGER”, “@hostelman”)
+TOKEN = “8729370914:AAFe5bDtSnGxuUbu-yUZ7dhNoRT-boOHkik”
+ADMIN_ID = 174415647
+MANAGER = “@hostelman”
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(**name**)
